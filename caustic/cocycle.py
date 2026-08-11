@@ -1,13 +1,38 @@
-"""Lyapunov exponents of a Jacobian cocycle, by QR iteration.
+"""Characteristic exponents of a Jacobian product, by QR iteration.
 
 This is the differential-geometric linearization composed along a trajectory. A
 single Jacobian is the local linear model of one step; the product
 
     J_n J_{n-1} ... J_1
 
-is the local linear model of n steps, and its singular values grow or decay
-exponentially at rates that Oseledets' Multiplicative Ergodic Theorem guarantees
-exist. Those rates are what `lyapunov_spectrum` returns.
+is the local linear model of n steps, and `lyapunov_spectrum` returns the mean
+log growth rate along each direction of that product.
+
+**The naming is a hazard and this module does not hide behind it.** Oseledets'
+Multiplicative Ergodic Theorem guarantees that such limits exist, but only under
+hypotheses that are not established here:
+
+    H1  a measure-preserving base dynamical system
+    H2  a genuine cocycle over it: A(m+n, x) = A(m, T^n x) A(n, x)
+    H3  integrability, log+ ||A(1, ·)|| in L^1
+    H4  a limit, not a fixed finite n
+
+Two different products are computed in this repository and they fare differently.
+
+The **block product** J_5 ... J_0 at a fixed token composes six *different* maps.
+There is no base system being iterated, so the cocycle identity H2 does not hold
+even in principle: it is a product of six distinct matrices and nothing more.
+Calling its output a Lyapunov exponent would be wrong, not merely unproven, and
+the experiments report it as a *finite-time QR characteristic exponent*.
+
+The **token product** at a fixed block has a better claim, since one map is
+applied along a sequence, but no invariant measure is exhibited, ergodicity is
+not established, and 46 steps is not a limit. H1, H3 and H4 are all unverified.
+
+What the returned numbers *are*, unconditionally: the mean log growth rates of a
+specific finite matrix product, computed exactly. Every closed-form test in the
+suite pins that reading. Whether they converge to Oseledets exponents is a
+separate question this repository does not answer.
 
 Multiplying the Jacobians directly does not work. Every column of the running
 product collapses onto the leading singular direction within a few dozen steps,

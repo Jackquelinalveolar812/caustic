@@ -1,24 +1,32 @@
-"""Finite-time Lyapunov exponents of a live language model, against a control.
+"""Finite-time characteristic exponents of a live language model, against a control.
 
-Two cocycles are measured, and they are different objects:
+Two different matrix products are measured and they are not the same kind of
+object:
 
-  block cocycle   J_5 ... J_0 at one fixed token   -- depth-wise transport
-  token cocycle   J_l(t) for t = t0 .. T-1         -- position-wise transport
+  block product   J_5 ... J_0 at one fixed token   -- six DIFFERENT maps
+  token product   J_l(t) for t = t0 .. T-1         -- one map along a sequence
 
-The block cocycle has exactly `n_layers` steps. On distilgpt2 that is 6, which is
-nowhere near the asymptotic regime Oseledets' theorem describes, so its output is
-reported as a *finite-time* exponent and the convergence trace is printed
-alongside it. Calling a 6-step average a Lyapunov exponent would be the single
-easiest overclaim available here.
+**Only the second is even a candidate cocycle.** The block product composes six
+distinct blocks, so there is no base system being iterated and the cocycle
+identity does not hold in principle. Oseledets' theorem does not apply to it, and
+its output is reported here as a finite-time QR characteristic exponent. Calling
+it a Lyapunov exponent would be wrong rather than merely unproven. The token
+product has a better claim but still exhibits no invariant measure, establishes
+no ergodicity, and runs 46 steps rather than a limit. See `caustic/cocycle.py`
+for the hypothesis audit.
+
+The block product additionally has only `n_layers` steps -- six on distilgpt2 --
+so the convergence trace is printed alongside every value, and a run whose
+last-step drift exceeds the value it drifts on is reported as noise rather than
+as a measurement.
 
 The control is the same token multiset in shuffled order. It preserves the
 embedding statistics and destroys only the grounded structure, so any quantity
-that fails to separate the two conditions is measuring lexical content. This is
-the control that already killed the point-cloud channel in
-`sigmoid/examples/why_tokens_fail.py`, where psi read distinct-type count at
-R^2 0.537 and predicted nothing forward.
+that fails to separate the two conditions is measuring lexical content rather
+than grounding. It is an out-of-distribution control, not a hallucination
+control, and settles nothing about factual error.
 
-    python experiments/lyapunov_llm.py
+    python -m caustic.experiments.lyapunov_llm
 """
 
 from __future__ import annotations
@@ -90,7 +98,7 @@ def main() -> None:
 
     results: dict[tuple[str, str], dict] = {}
 
-    print(f"BLOCK cocycle at the last token (n={L} steps -- FINITE-TIME, not asymptotic)")
+    print(f"BLOCK product at the last token (n={L} steps -- NOT a cocycle, see caustic/cocycle.py)")
     for cond, seq in conditions.items():
         with torch.no_grad():
             hs = model(seq, output_hidden_states=True).hidden_states
