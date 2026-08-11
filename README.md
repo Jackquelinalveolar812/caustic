@@ -276,7 +276,21 @@ a moral, and only a moral:
 
 > Local invertibility everywhere does not imply global injectivity.
 
-That is a statement about maps, not a theorem being borrowed, and
+**Historical note, because it is what put the question in view.** The Jacobian Conjecture is
+no longer open. In July 2026 Levent Alpöge, working with Claude Fable 5, produced an explicit
+polynomial counterexample refuting it in dimension 3, which extends to every `n >= 3` by
+adjoining identity coordinates; the plane case `n = 2` remains open. The refutation is what
+made "everywhere non-degenerate, still not injective" a live question rather than a
+technicality — a map can be non-degenerate at every point of its domain and still fail to be
+one-to-one, and now there is a polynomial witness to it.
+
+This is context, not support. The counterexample is a fact about polynomial maps on
+$\mathbb{C}^n$, the hypothesis table above still rules the theorem out here on all three
+counts, and nothing below depends on it. It is recorded because a reader who knows the result
+should know it was not overlooked, and a reader who does not should not have to guess why the
+moral is worth stating at all.
+
+That moral is a statement about maps, not a theorem being borrowed, and
 [§1.3](#13-the-fold-with-no-crease-the-case-that-actually-matters) already exhibits it with a
 circle, a square and an exponential. A model can have full-rank Jacobians at every point it
 ever visits and still fold two distinct grounded contexts onto one internal state. Full rank
