@@ -169,9 +169,10 @@ block.
 
 ### 4.1 The object
 
+**(1)**
+
 $$
 J_l(t) \;=\; \frac{\partial h_{l+1}[t]}{\partial h_l[t]} \;\in\; \mathbb{R}^{D \times D}
-\tag{1}
 $$
 
 `h_l ∈ ℝ^{1×T×D}` is the observed hidden state entering block `l`; `t` is one token
@@ -185,9 +186,10 @@ remains causal: position `t` still attends over the frozen prefix. This is imple
 
 Composing (1) along a trajectory of `n` steps gives the linear model of the whole trajectory:
 
+**(2)**
+
 $$
 J^{(n)} \;=\; J_n J_{n-1} \cdots J_1
-\tag{2}
 $$
 
 Two distinct cocycles exist in a transformer and are **not** interchangeable: across *blocks*
@@ -200,12 +202,13 @@ of them produced a usable number.
 The Multiplicative Ergodic Theorem guarantees that the growth rates of (2) exist, and that
 they organise the state space into a filtration
 
+**(3)**
+
 $$
 \mathbb{R}^D = V_1 \supset V_2 \supset \cdots \supset V_k \supset \{0\},
 \qquad
 \lim_{n \to \infty} \frac{1}{n} \log \lVert J^{(n)} v \rVert = \lambda_i
 \;\;\text{for}\;\; v \in V_i \setminus V_{i+1}
-\tag{3}
 $$
 
 `λ_1 ≥ λ_2 ≥ … ≥ λ_k` are the Lyapunov exponents and `dim V_i − dim V_{i+1}` is the
@@ -224,11 +227,12 @@ collapses onto the leading singular direction within a few dozen steps, and the 
 overflows or underflows shortly after, so all but the top exponent are lost. The fix is to
 re-orthonormalize the frame after each step and accumulate the log diagonal of `R`:
 
+**(4)**
+
 $$
 J_k Q_{k-1} = Q_k R_k,
 \qquad
 \lambda_i \;=\; \frac{1}{n\,\Delta t}\sum_{k=1}^{n} \log \lvert (R_k)_{ii} \rvert
-\tag{4}
 $$
 
 `Q_0 = I`. QR is unique only up to the sign of each column and LAPACK's choice of sign is not
@@ -241,13 +245,14 @@ folding produces exactly that case, so it is a **supported input, not an error**
 
 With `σ_1 ≥ σ_2 ≥ … ≥ σ_D` the singular values of a single `J`:
 
+**(5)**
+
 $$
 \sigma_{\max} = \sigma_1,
 \qquad
 \mathrm{srank}(J) = \frac{\lVert J \rVert_F^2}{\sigma_1^2} = \frac{\sum_i \sigma_i^2}{\sigma_1^2},
 \qquad
 \log \mathrm{vol}(J) = \sum_i \log \sigma_i
-\tag{5}
 $$
 
 `σ_max` is local expansion and bounds perturbation growth under products. Stable rank is the
@@ -259,12 +264,13 @@ volume change; large and negative is the coarse signature of folding.
 
 The fractal summary is the log-log slope over the bulk of the spectrum:
 
+**(6)**
+
 $$
 \sigma_i \sim i^{-a}
 \quad\Longrightarrow\quad
 a \;=\; -\,\mathrm{slope}\big(\log \sigma_i \;\text{vs}\; \log i\big),
 \qquad i \in [\,10,\ 400\,)
-\tag{6}
 $$
 
 The bulk window excludes the leading spike and the trailing numerical floor, neither of which
