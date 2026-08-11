@@ -108,6 +108,31 @@ def test_power_iteration_matches_exact_singular_values(W, h_in):
     assert rel.max() < 1e-6, f"max rel err {rel.max():.3e}\nest   {est}\nexact {exact}"
 
 
+def test_power_iteration_is_deterministic_across_calls(W, h_in):
+    """Same input, bitwise same estimate.
+
+    This test exists because the parity check above passed on five consecutive
+    runs and failed on a sixth. The estimator drew its starting block from the
+    global RNG, so an unlucky draw left it nearly orthogonal to a wanted singular
+    direction and twenty iterations could not recover. Any A/B built on a
+    non-deterministic estimator measures the estimator's own variance.
+    """
+    block = LinearBlock(W)
+    a = top_singular_values(block, h_in, pos=T - 1, k=4, iters=30)
+    torch.randn(1000)  # perturb the global RNG between calls
+    b = top_singular_values(block, h_in, pos=T - 1, k=4, iters=30)
+    assert torch.equal(a, b), f"drifted by {(a - b).abs().max():.3e}"
+
+
+def test_power_iteration_seed_none_still_returns_the_right_answer(W, h_in):
+    """Opting out of the seed must change the start, not the answer."""
+    block = LinearBlock(W)
+    exact = singular_values(exact_jacobian(block, h_in, pos=T - 1)).cpu().numpy()[:4]
+    for _ in range(5):
+        est = top_singular_values(block, h_in, pos=T - 1, k=4, iters=80, seed=None).cpu().numpy()
+        assert np.abs(est - exact).max() / exact.max() < 1e-5
+
+
 def test_out_of_range_position_raises(W, h_in):
     with pytest.raises(IndexError):
         exact_jacobian(LinearBlock(W), h_in, pos=T + 3)

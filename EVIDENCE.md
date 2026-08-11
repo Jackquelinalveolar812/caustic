@@ -156,7 +156,69 @@ that.
 
 ---
 
-## 5. Correctness of the instruments
+## 5. The Oseledets filtration — NEGATIVE, and it falsifies half the spine
+
+The programme's organising claim has two halves. The first is that the Jacobian is
+the causal object where a point cloud is not; that half stands. The second is that
+the filtration Oseledets' theorem induces is the same shape of object a
+persistence module decomposes into, so barcode tooling applies to it. **The second
+half does not survive measurement on distilgpt2.**
+
+Token cocycle, block 3, 46 steps, D = 768, `log(D) = 6.6438`. Bar count and
+multiplicity entropy across the full monotone tolerance sweep:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       tol        cond   n_bars  max_mult  entropy  entropy/logD
+  1.308e-05   grounded      763         2   6.6348        0.9986
+  1.059e-05   shuffled      759         3   6.6269        0.9975
+  1.308e-04   grounded      681         3   6.4793        0.9752
+  4.137e-04   grounded      531         7   6.1414        0.9244
+  1.308e-03   grounded      289        32   5.1567        0.7762
+  4.137e-03   grounded      107       395   2.5358        0.3817
+  1.308e-02   grounded       42       683   0.7172        0.1080
+  1.308e-01   grounded        6       760   0.0723        0.0109
+  1.308e+00   grounded        1       768  -0.0000       -0.0000
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Three findings, all negative:
+
+**1. At any tolerance fine enough to be honest, the filtration is D singletons.**
+`entropy/logD = 0.9986` at `tol = 1.3e-05`. The encoding is the sorted spectrum
+with extra steps and carries no additional information.
+
+**2. There is no plateau.** The bar count slides smoothly 763 → 739 → 681 → 531 →
+289 → 107 → 42 → 16 → 6 → 2 → 1 with no tolerance range where it holds steady. A
+spectrum with genuine subspace structure would show a plateau, because a real
+degeneracy survives a range of tolerances. Every tolerance here gives a different
+answer, which means **the grouping is measuring the tolerance, not the operator.**
+
+**3. Grounded and shuffled are indistinguishable at every tolerance.** 763 vs 759,
+681 vs 674, 531 vs 532, 289 vs 279, 107 vs 113, 42 vs 31, 6 vs 7. At the median
+adjacent gap both give 384 bars, with 148 against 152 of multiplicity > 1, and
+`entropy/logD` of **0.8495 against 0.8505** — a difference of 0.001.
+
+**What this means.** The Lyapunov spectrum of a transformer Jacobian cocycle is
+*generic*: no repeated exponents, no degenerate Oseledets subspaces of dimension
+above one. That is a substantive fact and not merely an absence — it says the
+dynamics at this level carry no symmetry that would force an invariant subspace.
+The persistence-barcode analogy is structurally suggestive and, here,
+computationally empty.
+
+**The salvage.** `tolerance_sweep` and `filtration_entropy` are a general test for
+whether *any* claimed filtration structure is real, and the diagnostic is the
+plateau rather than the value. A grouping that produces a different answer at
+every tolerance is reporting its own parameter. That test is reusable against any
+paper claiming discovered subspace or cluster structure from a thresholded
+spectrum, and it costs one sweep.
+
+**Limits.** One model, one width, one passage, one block, one seed, 46 cocycle
+steps. A degeneracy could exist at larger width, in a model with tied or
+structured weights, or over a longer trajectory. Nothing here rules that out; it
+rules out distilgpt2 at D = 768.
+
+## 6. Correctness of the instruments
 
 30 tests, all against closed-form answers rather than self-consistency.
 

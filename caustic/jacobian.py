@@ -80,7 +80,14 @@ def singular_values(J: torch.Tensor) -> torch.Tensor:
     return torch.linalg.svdvals(J.float())
 
 
-def top_singular_values(block, h_in: torch.Tensor, pos: int, k: int = 8, iters: int = 20) -> torch.Tensor:
+def top_singular_values(
+    block,
+    h_in: torch.Tensor,
+    pos: int,
+    k: int = 8,
+    iters: int = 20,
+    seed: int | None = 0,
+) -> torch.Tensor:
     """Top-k singular values by block power iteration on J^T J, using JVP and VJP.
 
     Never materializes J. Requires `attn_implementation="eager"` because the JVP
@@ -89,6 +96,15 @@ def top_singular_values(block, h_in: torch.Tensor, pos: int, k: int = 8, iters: 
     Accuracy against `exact_jacobian` was measured at max relative error 1.685e-04
     on the top 8 values (distilgpt2, layer 3, k=8, iters=20). The estimator is
     correct; it is simply slower than the exact path at this D.
+
+    `seed` fixes the random start and defaults to being set. An unseeded start
+    made this function non-deterministic, which was caught by a parity test that
+    passed on five consecutive runs and failed on a sixth: an unlucky draw can
+    leave a starting block nearly orthogonal to a wanted singular direction, and
+    twenty iterations do not recover it. Any A/B comparison built on a
+    non-deterministic estimator is measuring the estimator's own variance, so the
+    default is a fixed seed. Pass `seed=None` deliberately to sample the start,
+    for instance when estimating that variance on purpose.
     """
     f = block_map(block, h_in, pos)
     x = h_in[0, pos, :].detach().clone()
@@ -101,7 +117,14 @@ def top_singular_values(block, h_in: torch.Tensor, pos: int, k: int = 8, iters: 
         _, pull = torch.func.vjp(f, x)
         return pull(w)[0]
 
-    Q = torch.linalg.qr(torch.randn(D, k, device=x.device, dtype=x.dtype))[0]
+    if seed is None:
+        start = torch.randn(D, k, device=x.device, dtype=x.dtype)
+    else:
+        # Generator on the CPU then moved, so the same seed gives the same start
+        # on CPU and CUDA. A device-side generator does not guarantee that.
+        g = torch.Generator().manual_seed(seed)
+        start = torch.randn(D, k, generator=g, dtype=x.dtype).to(x.device)
+    Q = torch.linalg.qr(start)[0]
     for _ in range(iters):
         W = torch.stack([jvp(Q[:, j]) for j in range(k)], dim=1)
         Z = torch.stack([vjp(W[:, j]) for j in range(k)], dim=1)

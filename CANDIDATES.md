@@ -260,6 +260,30 @@ the candidate is specifically the dense default path.
 
 ---
 
+### K2 — the Oseledets/persistence bridge on a transformer cocycle
+
+Killed by the tolerance sweep. `entropy/logD = 0.9986` at the finest honest
+tolerance, meaning D singletons; the filtration is the sorted spectrum with extra
+steps. The bar count slides 763 to 1 with no plateau anywhere, so the grouping
+reports its own tolerance rather than the operator. Grounded and shuffled agree at
+every tolerance, ending at `0.8495` against `0.8505`.
+
+**What it establishes, positively:** the Lyapunov spectrum of a transformer
+Jacobian cocycle is generic — no repeated exponents, no Oseledets subspace of
+dimension above one. The dynamics carry no symmetry that would force an invariant
+subspace.
+
+**Salvage:** `tolerance_sweep` plus `filtration_entropy` is a reusable test for
+whether any claimed filtration structure is real, and the diagnostic is the
+*plateau*, not the value. A grouping that answers differently at every tolerance
+is reporting its parameter. This applies to any claim of discovered subspace or
+cluster structure obtained by thresholding a spectrum, at the cost of one sweep.
+
+**Limits:** distilgpt2 at D = 768, one block, one passage, 46 steps. Degeneracy at
+larger width or under tied weights is not excluded.
+
+---
+
 ## Killed
 
 ### K1 — J-space summary statistics as a hallucination detector
