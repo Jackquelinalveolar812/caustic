@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "caustic"
+version = "0.1.0"
+description = "The Jacobian space of a live language model, read through topology, differential geometry, fractal geometry and chaos."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Teerth Sharma", email = "teerthsharma@outlook.com" }]
+license = { text = "MIT" }
+dependencies = ["numpy>=1.24", "torch>=2.4"]
+
+[project.optional-dependencies]
+experiments = ["transformers>=4.40"]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["caustic*"]
