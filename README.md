@@ -18,7 +18,7 @@
   <a href="#10-negative-results"><img src="https://img.shields.io/badge/negatives-first--class%20section-red?style=flat-square" alt="Negatives"></a>
   <a href="#54-the-hypothesis-audit"><img src="https://img.shields.io/badge/Oseledets-hypotheses%20fail%2C%20stated-orange?style=flat-square" alt="Hypotheses"></a>
   <a href="#8-closed-form-propositions-the-test-suite-pins"><img src="https://img.shields.io/badge/propositions-proved%20in%20line-blueviolet?style=flat-square" alt="Propositions"></a>
-  <a href="#14-validation"><img src="https://img.shields.io/badge/tests-54%20closed--form-brightgreen?style=flat-square" alt="Tests"></a>
+  <a href="#14-validation"><img src="https://img.shields.io/badge/tests-71%20closed--form-brightgreen?style=flat-square" alt="Tests"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/core%20deps-numpy%20%2B%20torch-lightgrey?style=flat-square" alt="Deps"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A5%203.10-yellow?style=flat-square" alt="Python"></a>
 </p>
@@ -102,7 +102,7 @@ differentiation, Krylov subspace methods
 | [11](#11-what-would-falsify-this) | **What would falsify this** | One named measurement per live claim |
 | [12](#12-prior-art) | Prior art | Where the alternatives are better |
 | [13](#13-implementation-map) | Implementation map | File-by-file responsibility |
-| [14](#14-validation) | Validation | 54 closed-form assertions |
+| [14](#14-validation) | Validation | 71 closed-form assertions |
 | [15](#15-quick-start) | Quick start | Reproduce every box above |
 | [16](#16-requirements-and-measurement-environment) | Measurement environment | The one machine every number came from |
 | [17](#17-limitations) | Limitations | Collected once, at the end |
@@ -1672,11 +1672,11 @@ it is four lines of code.
 
 ## 14. Validation
 
-**54 tests, every one against a closed-form answer rather than against self-consistency.** Each is a
+**71 tests, every one against a closed-form answer rather than against self-consistency.** Each is a
 proposition from [§8](#8-closed-form-propositions-the-test-suite-pins) whose proof is on this page.
 
 ```bash
-python -m pytest --collect-only -q     # 54 tests collected
+python -m pytest --collect-only -q     # 71 tests collected
 python -m pytest tests/ -q             # no model download, no GPU required
 ```
 
