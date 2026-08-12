@@ -78,11 +78,18 @@ def main() -> None:
             rank = int((logits > logits[gold_id]).sum()) + 1
 
             # Logit lens: push each layer's state through the final norm and head.
+            #
+            # transformers applies the final norm BEFORE storing the last entry of
+            # hidden_states, so re-applying it there double-norms the state. That
+            # bug produced a spurious "the last two layers degrade the answer"
+            # result: the final layer's rank was computed from a state RMSNorm had
+            # been applied to twice. Verified on this model: lm_head(h) matches the
+            # returned logits to 1.05e-05 while lm_head(norm(h)) is off by 5.82.
             lens_rank = []
             for l in range(n_layers):
                 h = out.hidden_states[l][0, -1]
                 with torch.no_grad():
-                    lg = head(norm(h.unsqueeze(0)))[0]
+                    lg = head(h.unsqueeze(0))[0] if l == n_layers - 1 else head(norm(h.unsqueeze(0)))[0]
                 lens_rank.append(int((lg > lg[gold_id]).sum()) + 1)
                 H[l].append(h.float().cpu().numpy())
 
