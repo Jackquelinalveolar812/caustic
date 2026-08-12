@@ -284,7 +284,193 @@ larger width or under tied weights is not excluded.
 
 ---
 
+### C7 — 21 linear type-dedup scans in a file that already fixed the same bug
+
+**Status:** highest merge probability in the ledger. The maintainers already
+applied this exact fix to the sibling caches in the same file and stopped.
+
+**Hot path:** `KhronosGroup/glslang`, `SPIRV/SpvBuilder.cpp` — `makePointer` (149),
+`makeFunctionType` (809), `makeVectorType` (541), `makeMatrixType` (570),
+`makeStructResultType` (519), `makeIntegerType` (246), `makeFloatType` (288),
+`makeArrayType` (757). 21 sites total.
+
+| field | content |
+|---|---|
+| topology | equivalence classes under structural identity — the dedup key is a fixed tuple already present in each instruction's operands, so the partition exists and is being rediscovered by scan |
+| differential geometry | none; stated rather than padded |
+| fractal geometry | none; stated rather than padded |
+| computational mathematics | hashing — replace linear search over an equivalence class with a hash on the canonical key |
+| branch optimized | SPIR-V generation: type deduplication during shader compilation |
+
+**Current cost:** `groupedTypes` is `unordered_map<unsigned, vector<Instruction*>>`
+hashed on opcode only, with the inner vector scanned linearly. `O(T_op)` per
+`make*Type` call, so `O(T^2)` over `T` types of one opcode.
+
+**Predicted win:** `O(1)` expected, hashing `(opcode, immediate operands, id
+operands)` — the exact `ScalarConstantKey` idiom already in the file. The header
+shows `groupedScalarConstantResultIDs` is already an `unordered_map` and
+`groupedCompositeConstants` already an `unordered_set`; only the *type* caches were
+left on scans. **Zero public API change**, all members private.
+
+**Control:** `Test/baseResults/` holds 1,602 golden `.out` files and `Test/runtests`
+regenerates and diffs them. The gate is 1,602/1,602 byte-identical.
+
+**Determinism:** preserved. Dedup guarantees at most one match, so the map returns
+*the* unique existing type, and `constantsTypesGlobals.push_back` order is
+untouched — emitted SPIR-V is byte-identical.
+
+**Novelty check:** the fix is not novel; it is already in the file for constants.
+The candidate is that the type caches were never converted. Verify current source
+before writing.
+
+---
+
+### C8 — a reachability DFS with no visited set
+
+**Hot path:** `llvm/llvm-project`, `mlir/lib/Dialect/Affine/Analysis/Utils.cpp`,
+`MemRefDependenceGraph::hasDependencePath` (line 571).
+
+| field | content |
+|---|---|
+| topology | reachability in a DAG is monotone over *nodes*; the code enumerates *paths* |
+| differential geometry | none |
+| fractal geometry | path count grows exponentially in diamond depth — self-similar branching is what makes it blow up |
+| computational mathematics | graph search — a visited set collapses path enumeration to node enumeration |
+| branch optimized | affine loop-fusion legality checking in MLIR |
+
+**Current cost:** the worklist has no visited set; its only re-entry guards are a
+self-loop test and a program-order prune. A node reachable by `k` distinct paths is
+expanded `k` times, so cost is the number of distinct paths. For `m` chained
+diamonds that is exponential in `m`. Separately `outEdges` is a `DenseMap` whose
+`lookup` returns **by value**, so three lines each copy the whole out-edge vector.
+
+**Predicted win:** `O(V+E)` with a `DenseSet<unsigned>` marked on push. A
+multi-source DFS answers all queries in one walk. Replace three `lookup` calls with
+one `find`.
+
+**Control:** output is a bool and is provably unchanged — if a node was fully
+expanded once without yielding `dstId`, re-expansion cannot yield it. No fusion
+decision, no IR order, no printed output moves.
+
+**Determinism:** total. Frame as correctness-of-scaling rather than optimization:
+the only observable is that a pathological input stops hanging.
+
+**Novelty check:** NOT YET RUN.
+
+---
+
+### C9 — an inverted index built to compute a number already in hand
+
+**Hot path:** `huggingface/tokenizers`,
+`tokenizers/src/models/unigram/trainer.rs`, `UnigramTrainer::prune_sentence_pieces`.
+
+| field | content |
+|---|---|
+| topology | the piece-to-sentence incidence relation is materialized when only a scalar row-sum of it is ever read |
+| differential geometry | none |
+| fractal geometry | none |
+| computational mathematics | exact float arithmetic — `u32` counts widened to `f64` are exactly representable while the sum stays below `2^53`, so the two computations agree bit-for-bit and order-independently |
+| branch optimized | Unigram tokenizer training, the pruning loop |
+
+**Current cost:** `inverted[id].push(i)` runs once per Viterbi node, and the rayon
+reduce deep-copies every per-piece vector at each step. One push per token
+occurrence plus copying at every reduce level, with the piece count around 1e6 at
+the first prune, over roughly 12 loops.
+
+**Predicted win:** the sole consumer re-derives a weighted row sum over
+`inverted[id]` — which is exactly `freq[id]`, accumulated one line earlier. Delete
+`inverted`; replace the loop with `let f = freq[id];`. `O(1)` per piece, `O(1)`
+extra memory, reduce cost drops to zero.
+
+**Control:** `debug_assert_eq!(f, freq[id])` inside the current loop, then a golden
+training test asserting a byte-identical piece and score list.
+
+**Determinism:** bit-exact. The existing zero and NaN guard is preserved, since
+`freq[id]` is a sum of non-negative finite values and is zero exactly when the
+inverted entry is empty today.
+
+**Do not bundle:** a nearby line uses a vocabulary-wide length where SentencePiece
+uses a per-piece length. That changes training output and belongs in its own PR.
+
+---
+
+### C10 — a 256-bit dense scan of a bitset with one bit set
+
+**Hot path:** `ggml-org/llama.cpp`, `src/llama-kv-cells.h` — `seq_pos_rm` (517),
+`seq_pos_add` (526), `seq_get` (320).
+
+| field | content |
+|---|---|
+| topology | the sequence-membership relation per cell is a partition, and the header states most cells belong to exactly one class |
+| differential geometry | none |
+| fractal geometry | none |
+| computational mathematics | bit manipulation — count-trailing-zeros plus clear-lowest-set-bit iterates set bits in popcount time |
+| branch optimized | KV-cache sequence bookkeeping during decode |
+
+**Current cost:** `LLAMA_MAX_SEQ` is 256 and the loop tests all 256 bits, while
+`seq_get`'s own precondition asserts exactly one bit is set. Callers loop every
+cell, so one sequence-keep costs 8.4M bit tests on a 32,768-cell cache, a context
+shift 16.8M, and 512 per overwritten cell per decoded token.
+
+**Predicted win:** loop the four 64-bit words with count-trailing-zeros and
+clear-lowest-set-bit; `seq_get` becomes a single count-trailing-zeros. 30 to 60
+times fewer operations on those three functions.
+
+**Control:** none exists — the header carries a `TODO: add unit tests`. Writing
+`tests/test-kv-cells.cpp` is part of the contribution, not an afterthought.
+
+**Determinism:** same set visited in ascending order, and the operations commute
+over a map keyed by position. No floating point anywhere.
+
+---
+
+### C11 — a two-character correctness bug in tensor-sharing detection
+
+**Status:** not a performance candidate. A correctness defect, which is a different
+and usually easier conversation with a maintainer.
+
+**Hot path:** `huggingface/safetensors`,
+`bindings/python/py_src/safetensors/torch.py:71`.
+
+**The defect:** the interval sweep advances `last_stop = stop` where it must be
+`last_stop = max(last_stop, stop)`. With intervals `[0,100)`, `[10,20)` and
+`[50,60)`, the third is reported as non-shared despite overlapping the first.
+
+| field | content |
+|---|---|
+| topology | interval overlap is a connectivity relation; the sweep computes connected components and the bug breaks transitivity |
+| computational mathematics | sweep-line — the invariant is that the running bound is a maximum, not the last value seen |
+
+**Control:** the failing triple above as a regression test in
+`bindings/python/tests/test_pt_comparison.py`.
+
+**Fits the merge pattern:** a two-character correction to an existing hot path with
+a test that fails on the old code. That is the shape that merges.
+
+---
+
+## Verified and rejected — do not re-spend time here
+
+Recorded so the same ground is not covered twice.
+
+| target | why it was rejected |
+|---|---|
+| `networkx` transitive reduction, antichains | real, but the only correct replacements are new algorithms rather than corrections, and antichain enumeration is exponential so the closure amortizes away |
+| `scipy` `cluster_maxclust_monocrit` | the "should use an O(n) algorithm" TODO is stale; already binary search plus an O(n) walk |
+| `xgboost` `quantile.cc::AddCategories` | any fix changes bin indices and therefore model output. Fails determinism outright |
+| `hnswlib` `getNeighborsByHeuristic2` | bounded by `ef_construction * M` = 3,200, and distances are between different pairs each call |
+| DuckDB `FindGraphComponent` | already union-find with path halving |
+| Arrow `HashJoinSchema::MakeOutputSchema` | already an `unordered_multimap` |
+| TVM `graph_partitioner.cc` | already union-find with path compression and a visited set |
+| MLIR `mergeIdenticalBlocks` | the equivalence hash already short-circuits the quadratic term |
+| `tokenizers` BPE trainer | already a binary heap with incremental update tracking |
+| OpenBLAS `driver/others/memory.c` | bounded by the buffer count, and thread-safety-critical |
+| UCX `wireup.c` | everything bounded by the maximum lane count of 8 |
+
+---
+
 ## Killed
+
 
 ### K1 — J-space summary statistics as a hallucination detector
 
