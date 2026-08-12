@@ -9,7 +9,7 @@
 <p align="center">
   <strong>Invented by <a href="https://teerthsharma.vercel.app/">Teerth Sharma</a></strong> ·
   <a href="https://github.com/teerthsharma/caustic">github.com/teerthsharma/caustic</a> ·
-  <em>teerthsharma@outlook.com</em>
+  <em>teerths57@gmail.com</em>
 </p>
 
 <p align="center">

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "The Jacobian space of a live language model, read through topology, differential geometry, fractal geometry and chaos."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "Teerth Sharma", email = "teerthsharma@outlook.com" }]
+authors = [{ name = "Teerth Sharma", email = "teerths57@gmail.com" }]
 license = { text = "MIT" }
 dependencies = ["numpy>=1.24", "torch>=2.4"]
 
