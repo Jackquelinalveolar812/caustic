@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Caustic — hallucination detection from the orbit partition</title>
-<meta name="description" content="A hallucination detector and repair for language models, built from the orbit partition of a relation, with five proved bounds behind it.">
+<meta name="description" content="A hallucination detector, a repair and a governor for language models, built from the orbit partition of a relation, with five proved bounds behind them.">
 <style>
   :root {
     --bg: #fdfdfc;
@@ -12,6 +12,7 @@
     --muted: #5f5f58;
     --rule: #dedcd5;
     --accent: #0a6b8a;
+    --warn: #a2451b;
     --panel: #f4f3ee;
     --panel-rule: #e2e0d8;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -24,6 +25,7 @@
       --muted: #9d9c95;
       --rule: #2b2d34;
       --accent: #6fc2dd;
+      --warn: #e08a5c;
       --panel: #1b1d23;
       --panel-rule: #2b2d34;
     }
@@ -84,7 +86,10 @@
   th:first-child, td:first-child { text-align: left; }
   thead th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--fg); }
   tbody tr:last-child td { border-bottom: none; }
+  tbody + thead th { border-top: 1px solid var(--rule); }
   .num { font-variant-numeric: tabular-nums; }
+  tr.peak td { font-weight: 700; }
+  tr.peak td:first-child::after { content: "  ← peak"; font-weight: 400; color: var(--muted); }
   .lede { font-size: 1.05rem; color: var(--fg); }
   .note {
     border-left: 3px solid var(--accent);
@@ -93,6 +98,7 @@
     margin: 0 0 1.4rem;
     font-size: .96rem;
   }
+  .note.caution { border-left-color: var(--warn); }
   .note p:last-child { margin-bottom: 0; }
   .theorem { border-top: 1px solid var(--rule); padding-top: 1.2rem; margin-top: 2rem; }
   .statement { font-size: 1.02rem; }
@@ -112,7 +118,8 @@
   nav.toc li { margin: .15rem 0; }
   ul.plain { padding-left: 1.2rem; }
   ul.plain li { margin: 0 0 .5rem; }
-  svg.chain { width: 100%; height: auto; display: block; margin: 0 0 1.4rem; color: var(--fg); }
+  svg.chain, svg.curve { width: 100%; height: auto; display: block; margin: 0 0 .6rem; color: var(--fg); }
+  .figcap { font-size: .85rem; color: var(--muted); margin: 0 0 1.6rem; }
   footer { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); font-size: .9rem; color: var(--muted); }
   @media (max-width: 34rem) {
     body { font-size: 17px; }
@@ -126,11 +133,13 @@
 
 <header class="masthead">
   <h1>Caustic</h1>
-  <p class="thesis"><strong>A hallucination detector and repair for language models, built from
-  the orbit partition of a relation, with five proved bounds behind it.</strong></p>
+  <p class="thesis"><strong>A hallucination detector, a repair and a governor for language
+  models, built from the orbit partition of a relation, with five proved bounds behind
+  them.</strong></p>
   <p class="thesis">A model can know a fact and still be unable to reach it. When it cannot,
   distinct entities collapse onto one answer. That collapse is a topological invariant, it is
-  measurable with no ground truth, and it is bounded from below by a theorem.</p>
+  measurable with no ground truth, and it is bounded from below by a theorem. The same bound then
+  selects the intervention — including how much noise to add, and whether to intervene at all.</p>
   <p class="byline">
     <strong>Invented by <a href="https://teerthsharma.vercel.app/">Teerth Sharma</a></strong> ·
     <a href="https://github.com/teerthsharma/caustic">github.com/teerthsharma/caustic</a> ·
@@ -146,13 +155,28 @@
     <li><a href="#branches">Five branches, and what each contributes</a></li>
     <li><a href="#theorems">The five theorems, with proofs</a></li>
     <li><a href="#certify">What the method certifies</a></li>
-    <li><a href="#repair">Repair, and its own effect size</a></li>
+    <li><a href="#neartie">The decision is a near-tie</a></li>
+    <li><a href="#resonance"><strong>Stochastic resonance</strong></a></li>
+    <li><a href="#prompts"><strong>System prompts are never neutral</strong></a></li>
+    <li><a href="#ensemble">The ensemble, and where it fails</a></li>
+    <li><a href="#repair">Repair, and the governor</a></li>
+    <li><a href="#bridge">Comparing geometry across model widths</a></li>
     <li><a href="#inside">Inside a wrong answer</a></li>
     <li><a href="#dynamics">Dynamics and cost</a></li>
     <li><a href="#code">Running it</a></li>
-    <li><a href="#limits">Validation, environment, limits</a></li>
+    <li><a href="#validation">Validation and environment</a></li>
+    <li><a href="#attribution">Attribution</a></li>
+    <li><a href="#limits">Limits</a></li>
   </ol>
 </nav>
+
+<div class="note caution">
+  <p><strong>Two models, and the distinction is load-bearing.</strong> Sections 1–13 are measured
+  on <code>Qwen/Qwen2.5-0.5B</code> (<code>D = 896</code>, 24 blocks). Section 14 is measured on
+  <code>distilgpt2</code> (<code>D = 768</code>, 6 blocks). <strong>No figure from §14 may be
+  combined with one from §1–§13.</strong> They describe different networks. Reconciling them is
+  outstanding work, not a detail.</p>
+</div>
 
 <h2 id="failure">1 · The failure, measured</h2>
 
@@ -165,7 +189,7 @@ no task information. The control is built into the design rather than argued for
 
 <div class="scroll">
 <table>
-  <caption>Same model, same 20 country–capital pairs, same prefix length.</caption>
+  <caption>Same model, same entities, same prefix length. Only the character of the prefix varies.</caption>
   <thead>
     <tr><th>capital, 20 entities</th><th>accuracy</th><th>distinct answers</th><th>largest orbit</th></tr>
   </thead>
@@ -182,7 +206,9 @@ no task information. The control is built into the design rather than argued for
   <tbody class="num">
     <tr><td>no prefix</td><td>0.500</td><td>8</td><td>5</td></tr>
     <tr><td>coherent prose, 128 tok</td><td>0.750</td><td>12</td><td>1</td></tr>
+    <tr><td>shuffled words, 128 tok</td><td>1.000</td><td>12</td><td>1</td></tr>
     <tr><td>" the" &times; 128</td><td>0.000</td><td>2</td><td>7</td></tr>
+    <tr><td>random token ids, 128 tok</td><td>0.750</td><td>10</td><td>3</td></tr>
   </tbody>
 </table>
 </div>
@@ -217,7 +243,9 @@ properties make it the right instrument:</p>
   <li><strong>It cannot be confounded by accuracy.</strong> Every entity is included regardless
   of correctness, so no class can collapse and no comparison inherits a moving base rate.</li>
   <li><strong>It is what the theorems constrain.</strong> Both <code>n − m</code> and
-  <code>1/k</code> below are statements about blocks of this partition.</li>
+  <code>1/k</code> below are statements about blocks of this partition — and, because the bound
+  needs no answer key, it is also the objective every intervention on this page is scored
+  against.</li>
 </ul>
 
 <p>And it is stable. The adjusted Rand index between the partitions at different prefix
@@ -280,8 +308,9 @@ equivariance alone.</p>
   <em>should</em> collide, and the signal inverts to <strong>0.273</strong>. Point it at such a
   relation and you do not have a broken detector; you have a working detector with the sign
   reversed, which is worse.</p>
-  <p><code>RelationSpec.injective</code> records the precondition so it cannot be forgotten,
-  and the certificate below returns zero whenever it is false.</p>
+  <p><code>RelationSpec.injective</code> records the precondition so it cannot be forgotten. The
+  certificate below returns zero whenever it is false, and <code>select_prefix</code> raises
+  rather than optimising a score it knows is inverted.</p>
 </div>
 
 <h2 id="branches">4 · Five branches, and what each contributes</h2>
@@ -313,11 +342,14 @@ and the chain is the argument.</p>
     <path d="M232 62 l-8 -3 v6 z"/><path d="M232 74 l-8 -3 v6 z"/><path d="M430 68 l-8 -3 v6 z"/>
   </g>
 </svg>
+<p class="figcap">Two branches feed topology, topology feeds game theory, and the no-go stands
+aside to explain why the differential route cannot be taken alone.</p>
 
 <h3><span class="branch">topology ·</span> what shape does the failure have?</h3>
 <p>The answer-equivalence relation partitions the entities; the failure is a merge of blocks.
 Because the true relation is injective, a merged block is <em>already</em> a proof of error.
-Topology is what turns an observation into a count.</p>
+Topology is what turns an observation into a count — and the count into an objective a deployed
+system can optimise without labels.</p>
 
 <h3><span class="branch">game theory ·</span> how bad is a merge, downstream?</h3>
 <p>A block of size <em>k</em> mapped to one answer is a <strong>pooling equilibrium</strong> in
@@ -371,6 +403,11 @@ least one of them. An orbit of size <code>s</code> therefore contributes at leas
 answer. <strong>Measured:</strong> <code>capital</code> with no prefix gave <code>n = 20</code>,
 <code>m = 15</code>, certifying at least 5 wrong answers with no ground truth consulted;
 observed accuracy 0.550, so 9 were actually wrong and the bound held with slack.</p>
+<p class="meta"><strong>Why this one does more work than the others.</strong> It is the only
+theorem here that turns into an objective. Because the bound consults no answer key, it can be
+evaluated on a live relation where no answers are known — which is what makes the noise
+selection of <a href="#resonance">§8</a> and the prefix competition of
+<a href="#repair">§11</a> possible at inference time.</p>
 </div>
 
 <div class="theorem">
@@ -403,8 +440,11 @@ a path <code>γ</code> from <code>h₁</code> to <code>h₂</code>. If the direc
 <p class="meta"><strong>Consequence.</strong> If this holds for every candidate <code>c</code>,
 the two entities receive identical logit vectors, hence identical answers, hence share an
 orbit, and Theorem 1 applies. Differential geometry feeds topology.
-<code>path_integral_change</code> evaluates the integral numerically, and the suite pins it
-against linear and quadratic closed forms to <code>1e-6</code>.</p>
+<strong>Measured:</strong> the token the model actually chose on wrong items coupled to the
+entity at 0.93 times its coupling to control tokens, against 1.33 for the correct token — the
+chosen token was closer to entity-independent, which is the finite-difference shadow of this
+statement. <code>path_integral_change</code> evaluates the integral numerically, and the suite
+pins it against linear and quadratic closed forms to <code>1e-6</code>.</p>
 </div>
 
 <div class="theorem">
@@ -419,10 +459,11 @@ set <code>A</code> of positive Lebesgue measure, the volume of its image contrac
 like <code>exp(nS)</code>, so the volume does. <em class="qed">∎</em></p>
 <p class="meta"><strong>Consequence.</strong> Once the image volume falls below the resolution
 separating decision regions, distinct inputs must land in one region and pool. Chaos theory
-feeds topology. <strong>Measured:</strong> the token product at block 3 gave
-<code>S = −226.74</code> over 768 dimensions with only 139 expanding directions, and
+feeds topology. <strong>Measured on <code>distilgpt2</code>:</strong> the token product at block
+3 gave <code>S = −226.74</code> over 768 dimensions with only 139 expanding directions, and
 <code>D_KY = 29.57</code> at block 1 — a 26× compression against the width. What prevents total
-pooling in practice is that the trajectory is short, not that the map is volume-preserving.</p>
+pooling in practice is that the trajectory is short, not that the map is
+volume-preserving.</p>
 </div>
 
 <div class="theorem">
@@ -439,7 +480,9 @@ the Jacobian distinguishes the injective case from this one. <em class="qed">∎
 <p class="meta">This is the honest statement of a moral the refutation of the Jacobian
 Conjecture made vivid: local invertibility everywhere does not imply global injectivity, and
 the failure is invisible to local data. It is a <strong>no-go</strong> result, and it is the
-only theorem here that tells you what not to build. The escape is global, and Theorem 1 is what
+only theorem here that tells you what not to build. <strong>Measured corroboration:</strong>
+zero of 768 singular values fell below <code>1e-6 × sigma_max</code>, so the observed collapse
+occurred with an everywhere-nonsingular Jacobian. The escape is global, and Theorem 1 is what
 takes it: compare <em>two</em> entities rather than examining one point — which is why the
 shipped detector is five forward passes and no Jacobian at all.</p>
 </div>
@@ -452,23 +495,24 @@ answers are provably wrong, and the argument never consults an answer key.</p>
 
 <div class="scroll">
 <table>
-  <caption>The measured instance, with the accuracy column shown beside it rather than used by it.</caption>
-  <thead><tr><th>capital, 20 entities</th><th>n</th><th>m</th><th>certified wrong</th><th>observed accuracy</th></tr></thead>
+  <caption>Certified floor beside measured error. The theorem asserts floor ≤ measured, and it holds on every row with slack.</caption>
+  <thead><tr><th>relation, condition</th><th>n</th><th>m</th><th>certified floor</th><th>measured error</th></tr></thead>
   <tbody class="num">
-    <tr><td>no prefix</td><td>20</td><td>15</td><td>5</td><td>0.550</td></tr>
-    <tr><td>coherent prose</td><td>20</td><td>20</td><td>0</td><td>1.000</td></tr>
+    <tr><td>capital, no prefix</td><td>20</td><td>15</td><td>0.250</td><td>0.450</td></tr>
+    <tr><td>capital, prose 128</td><td>20</td><td>20</td><td>0.000</td><td>0.000</td></tr>
+    <tr><td>capital, " the" ×128</td><td>20</td><td>1</td><td>0.950</td><td>1.000</td></tr>
+    <tr><td>language, no prefix</td><td>12</td><td>8</td><td>0.333</td><td>0.500</td></tr>
+    <tr><td>language, prose 128</td><td>12</td><td>12</td><td>0.000</td><td>0.250</td></tr>
+    <tr><td>language, " the" ×128</td><td>12</td><td>2</td><td>0.833</td><td>1.000</td></tr>
   </tbody>
 </table>
 </div>
 
-<p>Two readings, both required. The certificate is <strong>sound</strong>: 5 were certified
-wrong, 9 were in fact wrong, and the bound held with slack. The certificate is <strong>not
-tight in practice</strong>: it saw 5 of the 9. Theorem 1 counts wrong answers; it does not name
-them. Declining to consult an answer key has a price, and that is the price.</p>
-
-<p>After repair the partition is fully separated, so the certificate correctly certifies
-nothing, and accuracy is 1.000 — the bound going to zero and the truth going to perfect, with
-accuracy never entering the computation.</p>
+<p>On <code>capital</code>, the choice of prefix moves the <strong>provable</strong> error floor
+across a <strong>95-point range</strong> — from 0.950 under a degenerate prefix to 0.000 under
+coherent prose, at identical token count. The reverse move is real and is reported: a prefix can
+<em>add</em> 0.700 to the certified floor, and <code>repair_by_context</code> returns that case
+as <code>WORSENED</code> rather than quietly returning a number.</p>
 
 <p><strong>Downstream, Theorem 2 caps what anything else can do.</strong> A pooled block of size
 <code>k</code> limits <em>any</em> recovery of the entity from the answer to <code>1/k</code>.
@@ -478,13 +522,270 @@ verifier, a second pass, a retrieval step reading the answer — raises it, beca
 distinguished the twenty entities is not in the answer to be read.</p>
 
 <div class="note">
-  <p><strong>What this is not.</strong> These are bounds on a <em>certificate</em>, measured on
-  one model and two relations. They are not a claim about hallucination rates in general, in
-  this model or in any other. Theorem 1 says what follows from a partition; it does not say how
-  often such partitions arise in deployment, and nothing here measures that.</p>
+  <p><strong>What these numbers are, and are not.</strong> They are bounds on a
+  <em>certificate</em>, measured on one model and two injective relations. <code>+0.250</code>
+  means a quarter of the answers were provably wrong before the intervention and none are
+  provably wrong after — not that the true error rate fell by exactly that much. On
+  <code>language</code> the true error fell from 0.500 to 0.250 while the certified floor went to
+  zero, which is the bound behaving exactly as a bound should.</p>
+  <p>The certificate is one-sided by construction. It can prove a model wrong. It can never
+  prove a model right.</p>
 </div>
 
-<h2 id="repair">7 · Repair, and its own effect size</h2>
+<h2 id="neartie">7 · The decision is a near-tie</h2>
+
+<p class="lede">The decision the model gets wrong is a near-tie, and this is what makes
+everything after it possible.</p>
+
+<div class="scroll">
+<table>
+  <caption>Measured on wrong items. The model is not confidently wrong; it is marginally wrong.</caption>
+  <thead><tr><th>quantity</th><th>value</th></tr></thead>
+  <tbody class="num">
+    <tr><td>vocabulary</td><td>151,936</td></tr>
+    <tr><td>wrong items</td><td>15 of 32</td></tr>
+    <tr><td>logit gap, chosen minus gold</td><td>mean 0.8338 · median 0.8085</td></tr>
+    <tr><td>logit standard deviation over vocab</td><td>mean 3.2942</td></tr>
+    <tr><td>gap as a fraction of one sd</td><td>mean 0.2526</td></tr>
+    <tr><td>p(chosen) / p(gold)</td><td>0.2042 / 0.1005 · ratio 2.76</td></tr>
+    <tr><td>mass on the other 151,934 tokens</td><td>0.6953</td></tr>
+    <tr><td>effective support exp(H)</td><td>wrong 30.0 · correct 27.5</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The model is wrong by <strong>a quarter of a standard deviation</strong>, choosing between
+roughly thirty live candidates while the remaining 151,934 tokens absorb 69.5% of the
+probability mass. That explains the size of the coherence effect: a prefix has to move logits by
+about 0.83 to flip these decisions, and a positive leading exponent means a small change at the
+input grows along the expanding directions.</p>
+
+<pre><code>prefix character changes
+  -&gt; perturbation grows            lambda_1 = +0.1653
+  -&gt; logits shift by order 0.83
+  -&gt; flips a 0.2526 sd near-tie among about 30 candidates
+  -&gt; distinct entities land on one answer, which is orbit collapse
+  -&gt; certified error floor moves from 0.000 to 0.950</code></pre>
+
+<p>Chaos theory earns its place here as the <em>explanation</em> rather than as a detector: the
+exponents do not separate correct from wrong answers and are useless as a signal. What they
+explain is why an intervention this weak — 128 tokens about photosynthesis, containing none of
+the answers — produces an effect this large. The decision was never robust.</p>
+
+<p><strong>And it names the next experiment.</strong> A signal present but below the level at
+which the readout commits to it is, in the exact technical sense, a <strong>sub-threshold
+signal</strong>. Systems with sub-threshold signals have a known and falsifiable response to
+noise.</p>
+
+<h2 id="resonance">8 · Stochastic resonance</h2>
+
+<p class="lede">Stochastic resonance is the phenomenon in which a nonlinear system's response to
+a sub-threshold signal <em>improves</em> under moderate noise and degrades again under too much.
+It predicts a specific shape, and only one of the three possible shapes is evidence.</p>
+
+<pre><code>monotone increase   noise is smoothing something; not resonance
+monotone decrease   no resonance; noise only destroys
+inverted U          resonance, with an optimum at intermediate noise</code></pre>
+
+<p>The peak must also exceed the zero-noise baseline, or the curve is a decline with a flat
+start. <strong>Where the noise goes:</strong> into the input embeddings, scaled by their own
+standard deviation, so <code>sigma</code> is dimensionless. Injecting into the logits directly
+would be a different and much weaker claim — it would test whether adding noise to a ranking
+changes the ranking, which is trivially true. Each level is scored by <strong>majority vote over
+16 draws</strong>, because resonance appears in the expectation and a single noisy pass is a
+worse estimator than a clean one.</p>
+
+<svg class="curve" viewBox="0 0 640 300" role="img" aria-label="Accuracy on the language relation rises from 0.500 at sigma 0 to a peak of 0.833 at sigma 0.8 and falls to 0.000 by sigma 1.6. The certified error floor, which uses no ground truth, is minimised at 0.083 at the same sigma of 0.8.">
+  <g stroke="currentColor" stroke-width="1" opacity=".25">
+    <line x1="70" y1="20" x2="620" y2="20"/>
+    <line x1="70" y1="75" x2="620" y2="75"/>
+    <line x1="70" y1="130" x2="620" y2="130"/>
+    <line x1="70" y1="185" x2="620" y2="185"/>
+    <line x1="70" y1="240" x2="620" y2="240"/>
+  </g>
+  <g fill="currentColor" opacity=".65" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11" text-anchor="end">
+    <text x="60" y="24">1.00</text>
+    <text x="60" y="79">0.75</text>
+    <text x="60" y="134">0.50</text>
+    <text x="60" y="189">0.25</text>
+    <text x="60" y="244">0.00</text>
+  </g>
+  <line x1="278" y1="20" x2="278" y2="240" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4" opacity=".5"/>
+  <polyline fill="none" stroke-width="2.5" style="stroke: var(--accent)"
+    points="70,130 174,112 278,57 382,93 486,240 590,240"/>
+  <polyline fill="none" stroke-width="2" stroke-dasharray="6 4" style="stroke: var(--warn)"
+    points="70,167 174,185 278,222 382,222 486,57 590,38"/>
+  <g style="fill: var(--accent)">
+    <circle cx="70" cy="130" r="3.5"/><circle cx="174" cy="112" r="3.5"/>
+    <circle cx="278" cy="57" r="5"/><circle cx="382" cy="93" r="3.5"/>
+    <circle cx="486" cy="240" r="3.5"/><circle cx="590" cy="240" r="3.5"/>
+  </g>
+  <g style="fill: var(--warn)">
+    <circle cx="70" cy="167" r="3"/><circle cx="174" cy="185" r="3"/>
+    <circle cx="278" cy="222" r="4.5"/><circle cx="382" cy="222" r="3"/>
+    <circle cx="486" cy="57" r="3"/><circle cx="590" cy="38" r="3"/>
+  </g>
+  <g fill="currentColor" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11" text-anchor="middle" opacity=".8">
+    <text x="70" y="260">0.0</text><text x="174" y="260">0.4</text><text x="278" y="260">0.8</text>
+    <text x="382" y="260">1.2</text><text x="486" y="260">1.6</text><text x="590" y="260">3.0</text>
+    <text x="345" y="278" opacity=".7">sigma  (noise sd, in units of the embedding sd)</text>
+  </g>
+  <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="11.5">
+    <line x1="80" y1="290" x2="108" y2="290" stroke-width="2.5" style="stroke: var(--accent)"/>
+    <text x="114" y="294" fill="currentColor">accuracy (needs gold)</text>
+    <line x1="300" y1="290" x2="328" y2="290" stroke-width="2" stroke-dasharray="6 4" style="stroke: var(--warn)"/>
+    <text x="334" y="294" fill="currentColor">certified error floor (no gold)</text>
+  </g>
+</svg>
+<p class="figcap"><code>language</code>, 12 entities, <code>Qwen/Qwen2.5-0.5B</code>, seed 0,
+majority vote over 16 draws. The dashed vertical marks <code>sigma = 0.80</code>: accuracy is
+maximised and the certified floor is minimised at the same point, and the floor never saw an
+answer.</p>
+
+<div class="scroll">
+<table>
+  <caption>The full sweep. The certified-floor column is <code>certified_error_floor(12, m)</code> applied to the distinct-answer column beside it, so it is a function of the partition and of nothing else.</caption>
+  <thead><tr><th>sigma</th><th>accuracy</th><th>vs baseline</th><th>distinct answers</th><th>certified floor</th></tr></thead>
+  <tbody class="num">
+    <tr><td>0.00</td><td>0.500</td><td>+0.000</td><td>8</td><td>0.333</td></tr>
+    <tr><td>0.40</td><td>0.583</td><td>+0.083</td><td>9</td><td>0.250</td></tr>
+    <tr class="peak"><td>0.80</td><td>0.833</td><td>+0.333</td><td>11</td><td>0.083</td></tr>
+    <tr><td>1.20</td><td>0.667</td><td>+0.167</td><td>11</td><td>0.083</td></tr>
+    <tr><td>1.60</td><td>0.000</td><td>−0.500</td><td>2</td><td>0.833</td></tr>
+    <tr><td>3.00</td><td>0.000</td><td>−0.500</td><td>1</td><td>0.917</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><strong>Inverted U confirmed.</strong> Accuracy rises to 0.833 at <code>sigma = 0.80</code>
+and falls to 0.000 by <code>sigma = 1.60</code>, a gain of <strong>+0.333 over the zero-noise
+baseline from noise alone</strong>. No prefix was added, no answer was consulted, no parameter
+was changed. The only intervention is Gaussian noise on the input embeddings and a vote.</p>
+
+<p><strong>The distinct-answer column is the mechanism, not a diagnostic beside it.</strong> It
+runs 8 → 9 → 11 → 11 → 2 → 1. Moderate noise <em>breaks</em> orbit collapse — entities that were
+sharing an answer stop sharing it — and excessive noise <em>causes</em> orbit collapse, driving
+all twelve languages onto one answer. At <code>sigma = 3.00</code> the model gives the same
+answer to every question, which is at least self-consistent, and is the sharpest available
+demonstration that an invariance-only detector would score that condition as healthy.</p>
+
+<h3>Theorem 1 selects the noise level with no ground truth</h3>
+
+<p>This is the result that makes the section a method rather than a curiosity. The accuracy
+series requires an answer key. The floor series does not — it is <code>(n − m) / n</code>
+computed from the model's own answers. <strong>The two agree on the argmin.</strong> A caller
+with no labels can sweep <code>sigma</code>, score each level by the certified floor, and land on
+the level that in fact maximises accuracy.</p>
+
+<p>That is a closed loop: a quantity a deployed system can compute selects a hyperparameter a
+deployed system otherwise cannot tune. The same loop drives prefix selection in
+<a href="#repair">§11</a>, where the empty prefix is always a candidate so the governor can
+decline.</p>
+
+<div class="note caution">
+  <p><strong>The optimum is relation-dependent, and <code>capital</code> declines.</strong> Under
+  identical noise on the identical model, <code>capital</code> shows no resonance at all:
+  accuracy declines monotonically from 0.550 to 0.200. There is no universally good
+  <code>sigma</code>, only a procedure for finding one — which is why the paragraph above is the
+  load-bearing half of this section. Publishing <code>sigma = 0.8</code> as a recommended setting
+  would have been wrong on one of the two relations tested.</p>
+</div>
+
+<pre><code>python -m caustic.experiments.stochastic_resonance</code></pre>
+
+<h2 id="prompts">9 · System prompts are never neutral</h2>
+
+<p class="lede">A system prompt is a prefix, and <a href="#failure">§1</a> established that
+prefixes move the certified error floor by up to 95 points at fixed length. So "does this system
+prompt damage factual retrieval" is an empirical question with a cheap answer, and the answer is
+not automatically no.</p>
+
+<div class="scroll">
+<table>
+  <caption>Six prompts, <code>capital</code>, 20 entities. ARI is against the no-prompt partition; entropy is mean predictive entropy.</caption>
+  <thead><tr><th>prompt</th><th>tok</th><th>acc</th><th>orbits</th><th>largest</th><th>ARI vs none</th><th>entropy</th></tr></thead>
+  <tbody class="num">
+    <tr><td>none</td><td>0</td><td>0.550</td><td>15</td><td>4</td><td>1.0000</td><td>3.5622</td></tr>
+    <tr><td>helpful</td><td>14</td><td>0.750</td><td>19</td><td>2</td><td>0.1923</td><td>3.0786</td></tr>
+    <tr><td>cautious</td><td>29</td><td>0.300</td><td>9</td><td>6</td><td>0.2721</td><td>3.2967</td></tr>
+    <tr><td>persona</td><td>27</td><td>0.900</td><td>20</td><td>1</td><td>0.0000</td><td>4.3754</td></tr>
+    <tr><td>json</td><td>22</td><td>0.950</td><td>20</td><td>1</td><td>0.0000</td><td>3.6461</td></tr>
+    <tr><td>long_policy</td><td>54</td><td>0.750</td><td>18</td><td>3</td><td>0.1465</td><td>4.0753</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Three readings, in order of how uncomfortable they are.</p>
+
+<p><strong>Not one of six is neutral.</strong> A prompt is neutral when it leaves the partition
+alone, <code>ARI = 1.0000</code>. The highest achieved is 0.2721 and two are exactly 0.0000.
+Every one of these prompts restructured which entities share an answer. A prompt that improves
+accuracy while restructuring the partition has intervened on factual retrieval; it has not left
+it alone.</p>
+
+<p><strong>The prompt instructing care is the worst one.</strong> <code>cautious</code> — "if you
+are not certain of a fact, say so rather than guessing" — <strong>halves accuracy, 0.550 to
+0.300</strong>, and merges orbits from 15 to 9. By Theorem 1 that moves the certified error floor
+from 0.250 to 0.550: it more than doubles the number of answers that are <em>provably</em> wrong.
+The instruction most likely to appear verbatim in a production system prompt did the most damage
+of the six.</p>
+
+<p><strong>Formatting instructions are not free either, and here the sign is positive.</strong>
+<code>json</code>, 22 tokens about output format and nothing about facts, reaches
+<strong>0.950</strong> with a fully separated partition. <code>persona</code>, which asks for
+confidence and wit, reaches 0.900. Neither prompt contains information about capitals, and both
+moved the partition further than <code>helpful</code> did.</p>
+
+<pre><code>from caustic.governor import prompt_cost
+
+cost = prompt_cost(spec, top1, "You are a careful assistant. ", name="cautious")
+print(cost)          # cautious: floor 0.250 -&gt; 0.550 (+0.300), ARI 0.2721, costs
+print(cost.neutral)  # False — neutrality is ARI &gt;= 0.99, not "did not obviously hurt"</code></pre>
+
+<h2 id="ensemble">10 · The ensemble, and where it fails</h2>
+
+<p class="lede">A near-tie and a positive leading exponent together say a single forward pass sits
+on an unstable decision. The classical response is not to predict one trajectory but to average
+over many.</p>
+
+<p>Here that means asking the same question under eight different neutral prefixes and taking a
+consensus. Two consensus rules, because they fail differently and reporting only one is choosing
+the flattering one after the fact.</p>
+
+<div class="scroll">
+<table>
+  <caption>single = no prefix, one forward pass. best-1 / worst-1 = the luckiest and unluckiest individual prefix of the eight.</caption>
+  <thead><tr><th>relation</th><th>n</th><th>single</th><th>best-1</th><th>worst-1</th><th>mean-logit</th><th>vote</th></tr></thead>
+  <tbody class="num">
+    <tr><td>capital</td><td>20</td><td>0.550</td><td>0.800</td><td>0.000</td><td>0.100</td><td>0.600</td></tr>
+    <tr><td>language</td><td>12</td><td>0.500</td><td>0.917</td><td>0.417</td><td>0.917</td><td>0.917</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><strong>Mean-logit averaging collapses on <code>capital</code> to 0.100</strong> — below the
+0.550 of a single pass with no ensemble at all. The ensemble was built to reduce variance and,
+under mean-logit, reduced accuracy instead. The cause is visible in the same row: individual
+prefixes span 0.000 to 0.800, and a single confident outlier dominates a mean of magnitudes.
+Averaging logits gives the most opinionated member of the ensemble a veto over the other
+seven.</p>
+
+<p><strong>Majority vote never goes catastrophic.</strong> It reaches 0.600 on
+<code>capital</code>, above the single-pass baseline, and 0.917 on <code>language</code>,
+equalling best-1 without knowing in advance which prefix that was. It does not always win — on
+<code>language</code> mean-logit ties it — but it does not lose by 45 points either.</p>
+
+<div class="note">
+  <p><strong>The lesson, stated as a rule.</strong> With a positive characteristic exponent,
+  <strong>average ranks, not magnitudes.</strong> A magnitude is a trajectory-dependent quantity
+  in a system where trajectories diverge; a rank is not. Every consensus in this repository — the
+  resonance vote of <a href="#resonance">§8</a>, the governor of <a href="#repair">§11</a> — is
+  rank-based or partition-based, and none of them averages a logit.</p>
+  <p>The failure is the more useful half of the result, and it is the half a report showing only
+  the <code>language</code> row would have omitted.</p>
+</div>
+
+<h2 id="repair">11 · Repair, and the governor</h2>
 
 <p class="lede">The detector finds collapsed orbits. <code>repair_by_context</code> applies the
 intervention the measurements point at, and reports the effect size rather than asserting
@@ -494,8 +795,8 @@ it.</p>
 
 report = repair_by_context(spec, answer_fn, prefix=NEUTRAL_PREFIX, gold=gold)
 print(report)
-# largest orbit 20 -> 1, distinct answers 1 -> 20 of 20 entities,
-# accuracy 0.000 -> 1.000  REPAIRED</code></pre>
+# largest orbit 20 -&gt; 1, distinct answers 1 -&gt; 20 of 20 entities,
+# accuracy 0.000 -&gt; 1.000  REPAIRED</code></pre>
 
 <ul class="plain">
   <li><code>repaired</code> — true only for a genuine collapsed → fully separated transition.</li>
@@ -506,25 +807,84 @@ print(report)
 </ul>
 
 <p><strong><code>worsened</code> is not a defensive check.</strong> An incoherent prefix of the
-same length drove the largest orbit from 4 to 20 in the measurements this module is built on. A
-prefix can make things much worse, and a repair function that cannot say so is a repair
-function that will eventually lie.</p>
+same length drove the largest orbit from 4 to 20 in the measurements this module is built on,
+adding 0.700 to the certified floor. A prefix can make things much worse, and a repair function
+that cannot say so is a repair function that will eventually lie.</p>
 
 <p><strong>Why this is not prompt engineering in the pejorative sense.</strong> The prefix
 contains none of the answers, is identical across entities, and is unrelated in subject. It
 cannot be leaking an answer, because the <em>same 128 tokens in shuffled order</em> drive
-accuracy to zero. What it supplies is distributional, not informational.
+accuracy to zero on <code>capital</code>. What it supplies is distributional, not informational.
 <code>NEUTRAL_PREFIX</code> is 128 tokens on mechanical calculators, ocean currents, language
 and photosynthesis — the least interesting paragraph in the repository, and on
 <code>capital</code> it is worth 0.550 → 1.000.</p>
 
-<p>Two honest constraints ship with it. If a caller's relation concerns oceans, looms or
-photosynthesis then <code>NEUTRAL_PREFIX</code> is no longer neutral for them, which is why the
-prefix is a parameter. And <code>sweep_prefixes</code> returns a report for <em>every</em>
-candidate prefix, because quoting the best of several without reporting the rest is selection
-on the outcome.</p>
+<h3>The governor: selection by competition</h3>
 
-<h2 id="inside">8 · Inside a wrong answer</h2>
+<p>A single hand-picked prefix is a bet on which of several you happened to write. Over the eight
+neutral prefixes of <a href="#ensemble">§10</a>, individual accuracy on <code>capital</code>
+ranged from <strong>0.000 to 0.800</strong>. The governor does not need to be lucky, only to be
+able to score — and Theorem 1 gives it a score that needs no ground truth.</p>
+
+<ul class="plain">
+  <li><strong>Always enters the empty prefix</strong>, under the name <code>none</code>, so
+  declining to intervene is a first-class outcome rather than a failure to find one.</li>
+  <li><strong>Declines unless a candidate strictly beats doing nothing</strong>, breaking ties
+  toward declining and then toward the earlier candidate.</li>
+  <li><strong>Reports the margin</strong> over doing nothing as <code>improvement</code>, which
+  is therefore never negative.</li>
+  <li><strong>Raises on a non-injective relation</strong> rather than optimising a score it knows
+  is inverted.</li>
+  <li><strong>Returns every candidate's score</strong>, because a governor that shows only its
+  winner is a governor that cannot be audited.</li>
+</ul>
+
+<pre><code>from caustic import select_prefix
+
+verdict = select_prefix(spec, top1, {"prose": NEUTRAL_PREFIX, "terse": "Answer briefly. "})
+print(verdict)            # selected 'prose': floor 0.250 -&gt; 0.000 (+0.250), largest orbit 1
+print(verdict.intervened) # False when nothing beat the empty prefix
+print(verdict.scores)     # every candidate's floor, including 'none'</code></pre>
+
+<h2 id="bridge">12 · Comparing geometry across model widths</h2>
+
+<p class="lede">Every geometric quantity here lives in <code>R^D</code>, so a coupling ratio
+measured at <code>D = 896</code> is not directly comparable to one from a model of width 4096.
+That is the sharpest limitation in the results, and the bridge is the partial answer to it.</p>
+
+<p>A <strong>seeded Johnson–Lindenstrauss projection</strong> into a fixed <code>k</code>. The JL
+lemma states that a random linear map into <code>R^k</code> preserves pairwise squared distances
+to within <code>1 ± eps</code> with high probability, for <code>k = O(log n / eps²)</code>
+<em>independent of the source dimension</em>. Norms survive, and a ratio of norms survives with
+the distortions partially cancelling. The seed is the load-bearing detail: two runs sharing
+<code>CANONICAL_SEED</code> share a projection matrix exactly, so numbers from different models
+land in one frame rather than merely in one dimension.</p>
+
+<div class="scroll">
+<table>
+  <caption>A true coupling ratio of 1.33, recovered after projection from three source widths. Measured on synthetic gradients built with the observed structure.</caption>
+  <thead><tr><th>target k</th><th>D = 896</th><th>D = 2048</th><th>D = 4096</th><th>spread</th><th>per-item error</th></tr></thead>
+  <tbody class="num">
+    <tr><td>64</td><td>1.3445</td><td>1.3376</td><td>1.3444</td><td>0.0052</td><td>9.3%</td></tr>
+    <tr><td>256</td><td>1.3316</td><td>1.3287</td><td>1.3288</td><td>0.0022</td><td>5.4%</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note caution">
+  <p><strong>The limitation, stated as prominently as the result.</strong> Per-item relative
+  error is <strong>9.3% at <code>k = 64</code> and 5.4% at <code>k = 256</code></strong>. The
+  projection makes <em>population</em> statistics comparable across widths. It does
+  <strong>not</strong> make individual measurements comparable. A claim about a distribution
+  survives the projection; a claim about a single entity does not, and a 5.4% per-item error is
+  larger than most of the effects this repository would want to attribute to a single
+  entity.</p>
+  <p><code>jl_distortion_bound</code> returns <code>inf</code> rather than a small number
+  whenever <code>k</code> is too small for any useful guarantee, because a small number would be
+  read as a promise.</p>
+</div>
+
+<h2 id="inside">13 · Inside a wrong answer</h2>
 
 <p class="lede">Measured on items the model answers <strong>wrongly</strong>, with grouped
 cross-validation so that no template appears in both folds.</p>
@@ -548,7 +908,8 @@ cross-validation so that no template appears in both folds.</p>
 addresses: the loss happens where distinct entities are mapped onto one answer, not in the
 representation feeding that map. It is also why Theorem 5 matters operationally — there is no
 local degeneracy at the moment of failure to go looking for, because nothing locally degenerate
-has happened.</p>
+has happened. And it is the precondition for <a href="#resonance">§8</a>: noise can only lift a
+signal that is present, and this table is where the signal is shown to be present.</p>
 
 <div class="scroll">
 <table>
@@ -569,14 +930,21 @@ afterwards.</p>
 that were not trained to be read through it, so ranks before layer 24 are indicative. Layer 24
 is exact — it reproduces the model's own output.</p>
 
-<h2 id="dynamics">9 · Dynamics and cost</h2>
+<h2 id="dynamics">14 · Dynamics and cost</h2>
+
+<div class="note caution">
+  <p><strong>Measured on <code>distilgpt2</code>, <code>D = 768</code>, 6 blocks — not on the
+  model used in §1–§13.</strong> No figure in this section may be combined with one from §1–§13.
+  The dynamics and cost measurements predate the switch to a model that knows facts and were not
+  re-run. Reconciling the two is outstanding work.</p>
+</div>
 
 <p class="lede">Theorem 4 needs a negative exponent sum. This is where that hypothesis is
 measured rather than assumed.</p>
 
 <div class="scroll">
 <table>
-  <caption>Characteristic exponents of the token-position Jacobian product, block 3, 46 steps, D = 768, against a shuffled-token control preserving the token multiset.</caption>
+  <caption>Characteristic exponents of the token-position Jacobian product, block 3, 46 steps, against a shuffled-token control preserving the token multiset.</caption>
   <thead><tr><th></th><th>lambda_1</th><th>sum</th><th>expanding</th><th>last-step drift</th></tr></thead>
   <tbody class="num">
     <tr><td>grounded</td><td>+0.1653</td><td>−226.74</td><td>139 / 768</td><td>0.0012</td></tr>
@@ -605,8 +973,8 @@ against the value it drifts on.</p>
 <code>D_KY</code> varies across depth with <code>cv 0.6801</code>, so it is <strong>not</strong>
 a width-invariant constant, and the block-0 value saturates the formula rather than measuring a
 dimension. Both facts are stated because the number is otherwise easy to over-read: contraction
-is the hypothesis Theorem 4 needs, and <code>D_KY</code> describes how strong it is, not a
-second invariant.</p>
+is the hypothesis Theorem 4 needs, and <code>D_KY</code> describes how strong it is at a given
+depth, not a second invariant of the network.</p>
 
 <div class="scroll">
 <table>
@@ -631,18 +999,19 @@ is not assumed.</p>
 passes and no Jacobian at all</strong>, which Theorem 5 predicts in advance: the Jacobian could
 not have supplied the missing signal at any price.</p>
 
-<h2 id="code">10 · Running it</h2>
+<h2 id="code">15 · Running it</h2>
 
 <pre><code>git clone https://github.com/teerthsharma/caustic.git
 cd caustic
 pip install -e ".[dev]"          # numpy, torch, pytest
-python -m pytest -q              # 137 passed, no model download, no GPU
+python -m pytest -q              # 163 passed, no model download, no GPU
 pip install -e ".[experiments]"  # transformers, for a live model</code></pre>
 
 <pre><code>import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from caustic import NEUTRAL_PREFIX, RelationSpec, orbit_partition, repair_by_context
+from caustic import select_prefix
 
 MODEL = "Qwen/Qwen2.5-0.5B"
 tok = AutoTokenizer.from_pretrained(MODEL)
@@ -666,32 +1035,51 @@ spec = RelationSpec(
     injective=True,          # distinct countries have distinct capitals
 )
 
+# 1. Detect. No ground truth is consulted anywhere in this block.
 report = orbit_partition(spec, top1)
 print(report)                      # n entities -&gt; m distinct answers, largest orbit s
-print(report.certified_errors)     # Theorem 1: n - m, proved, no gold consulted
+print(report.certified_errors)     # Theorem 1: n - m, proved
+print(report.certified_error_rate) # the same bound as a rate, which is the objective
 print(report.collapsed)            # the boolean to act on
 
+# 2. Repair with a fixed prefix, and measure the effect. `gold` is optional and
+#    is used only to print an accuracy column beside the verdict.
 gold = {e: tok(" " + a, add_special_tokens=False).input_ids[0]
         for e, a in facts.items()}
 
 print(repair_by_context(spec, top1, prefix=NEUTRAL_PREFIX, gold=gold))
 # largest orbit s -&gt; 1, distinct answers m -&gt; 5 of 5 entities,
-# accuracy a -&gt; b  REPAIRED</code></pre>
+# accuracy a -&gt; b  REPAIRED
+
+# 3. Or do not pick the prefix yourself. The governor runs candidates in
+#    competition scored by the certified floor, always enters the empty prefix,
+#    and declines when nothing beats doing nothing.
+verdict = select_prefix(spec, top1, {
+    "prose": NEUTRAL_PREFIX,
+    "terse": "Answer with a single word. ",
+})
+print(verdict)              # selected 'prose': floor x -&gt; y (+d), largest orbit 1
+print(verdict.intervened)   # False if the empty prefix won
+print(verdict.improvement)  # certified error removed relative to doing nothing
+print(verdict.scores)       # every candidate, including 'none'</code></pre>
 
 <p><code>orbit_partition</code> uses the first template. <code>symmetry_scores(spec, top1)</code>
 uses all of them and needs at least two, since invariance is undefined on one. Set
-<code>injective=False</code> for a many-to-one relation and both
-<code>certified_errors</code> and <code>collapsed</code> correctly report nothing.</p>
+<code>injective=False</code> for a many-to-one relation: <code>certified_errors</code> and
+<code>collapsed</code> then correctly report nothing, and <code>select_prefix</code> raises.</p>
 
-<p>The theorems are callable on their own:</p>
+<p>Each experiment prints its own table and its own control:</p>
 
-<pre><code>from caustic import orbit_error_bound, pooling_recovery_bound, winding_witness
+<pre><code>python -m caustic.experiments.coherence_vs_length       # §1
+python -m caustic.experiments.orbit_invariant           # §2
+python -m caustic.experiments.symmetry_break            # §3
+python -m caustic.experiments.stochastic_resonance      # §8
+python -m caustic.experiments.ensemble_and_neutrality   # §9, §10
+python -m caustic.experiments.answer_presence           # §13
+python -m caustic.experiments.attractor_dimension       # §14
+python -m caustic.experiments.probe_cost                # §14</code></pre>
 
-orbit_error_bound(20, 15)                      # 5    -- Theorem 1, measured instance
-pooling_recovery_bound(20)                     # 0.05 -- Theorem 2, collapsed ceiling
-image, jac, det = winding_witness(0.0, 0.0)    # Theorem 5, nonsingular and many-to-one</code></pre>
-
-<h2 id="limits">11 · Validation, environment, limits</h2>
+<h2 id="validation">16 · Validation and environment</h2>
 
 <p><strong>163 tests, every one against a closed-form or independently computed answer.</strong>
 Some of them are negative controls — inputs whose correct answer is "nothing here" — because
@@ -714,6 +1102,8 @@ noise.</p>
     <tr><td>Theorem 5 both preimages share every spectral invariant</td><td>1e-9</td></tr>
     <tr><td>flat spectrum returns exponent zero (negative control)</td><td>1e-9</td></tr>
     <tr><td>partition is bitwise identical across repeated calls</td><td>exact</td></tr>
+    <tr><td>select_prefix declines when no candidate beats the empty prefix</td><td>exact</td></tr>
+    <tr><td>JL projection is bitwise identical under a shared seed</td><td>exact</td></tr>
   </tbody>
 </table>
 </div>
@@ -726,27 +1116,93 @@ code changed. There is no CI badge in this project, because there is no CI.</p>
 <pre><code>Hardware   NVIDIA GeForce RTX 4060 Laptop, 8 GiB · Windows 11
 Software   Python 3.11.9 · PyTorch 2.5.1+cu121 · transformers 5.3.0
            float32 · seed 0
-Model      Qwen/Qwen2.5-0.5B — D = 896, 24 blocks, vocabulary 151,936
-Dynamics   token-position Jacobian product, block 3, 46 steps, D = 768</code></pre>
 
-<h3>Limits</h3>
+§1–§13     Qwen/Qwen2.5-0.5B   D = 896   24 blocks   vocabulary 151,936
+§14        distilgpt2          D = 768    6 blocks</code></pre>
+
+<p>The <code>lambda_1 = +0.1653</code> that appears in the causal chain of
+<a href="#neartie">§7</a> is a <code>distilgpt2</code> measurement used to explain a
+<code>Qwen2.5-0.5B</code> observation. It is offered as a mechanism, not as a joint measurement.
+<a href="#bridge">§12</a> is the beginning of the fix, and its per-item error of 5.4% at
+<code>k = 256</code> is the beginning of why it is not yet the whole fix.</p>
+
+<h2 id="attribution">17 · Attribution</h2>
+
+<p>Four constructions in this repository were adapted from the author's other work.</p>
+
+<div class="scroll">
+<table>
+  <caption>Each construction, and the file that carries it here.</caption>
+  <thead><tr><th>source</th><th>construction</th><th>used in</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><a href="https://github.com/teerthsharma/Epsilon">Epsilon</a></td>
+      <td style="white-space: normal">a seeded Johnson–Lindenstrauss map into a shared frame, so two agents can compare geometry without exchanging full representations</td>
+      <td><code>caustic/bridge.py</code></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/teerthsharma/epsilon-cli">epsilon-cli</a></td>
+      <td style="white-space: normal">the stochastic-resonance framing: a sub-threshold signal, an inverted-U response, and the requirement that the peak beat the zero-noise baseline</td>
+      <td><code>experiments/stochastic_resonance.py</code></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/teerthsharma/EPSILON-PHASE">EPSILON-PHASE</a></td>
+      <td style="white-space: normal">adaptive noise scheduling — sweeping an injected-noise level rather than fixing it, and selecting per regime</td>
+      <td>the <code>sigma</code> sweep of §8</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/teerthsharma/laamba-silence">laamba-silence</a></td>
+      <td style="white-space: normal">a governor that runs several candidates in competition and lets a comparator pick the winner, rather than committing to one in advance</td>
+      <td><code>caustic/governor.py</code></td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>What is new here is what each construction is pointed at: a scorer that requires no ground
+truth. The JL frame carries a certified quantity rather than an agent state; the resonance sweep
+is selected by Theorem 1 rather than by held-out accuracy; the competition is scored by the orbit
+partition rather than by a reward model.</p>
+
+<h2 id="limits">18 · Limits</h2>
 
 <ul class="plain">
-  <li><strong>One model at one width.</strong> Whether coherence-gated retrieval is a general
+  <li><strong>One model per claim, two models in the repository.</strong> §1–§13 are
+  <code>Qwen2.5-0.5B</code> at <code>D = 896</code>; §14 is <code>distilgpt2</code> at
+  <code>D = 768</code>. They must not be combined. Whether coherence-gated retrieval is a general
   property of language models, or a behaviour of a 0.5B model outside its training regime, is
   <strong>not</strong> established here.</li>
   <li><strong>Two injective relations</strong>, of 12 and 20 entities. One distractor passage
-  per condition, one seed.</li>
+  per condition, one seed. Every effect in §8, §9 and §10 rests on those two relations, and they
+  disagree with each other more than once.</li>
+  <li><strong>The resonance optimum is relation-dependent.</strong> <code>language</code> peaks
+  at <code>sigma = 0.80</code> with a gain of +0.333; <code>capital</code> declines monotonically
+  under identical noise, 0.550 to 0.200. There is no recommended <code>sigma</code>, only a
+  procedure for finding one.</li>
+  <li><strong>Mean-logit ensembling is unsafe under a positive exponent.</strong> It scored 0.100
+  on <code>capital</code>, below a single pass, because one confident outlier dominates a mean of
+  magnitudes. Average ranks, not magnitudes.</li>
+  <li><strong>The system-prompt result is a measurement on one relation.</strong> Six prompts on
+  <code>capital</code>. That <code>cautious</code> halves accuracy is a fact about these 20
+  entities and this model; that <em>no prompt is neutral</em> is the claim that generalises, and
+  it generalises because neutrality is defined as <code>ARI = 1.0</code> and nothing reached
+  it.</li>
+  <li><strong>The JL bridge carries populations, not individuals.</strong> Per-item relative
+  error is 9.3% at <code>k = 64</code> and 5.4% at <code>k = 256</code>.</li>
   <li><strong>Top-1 token comparison.</strong> Answers are compared by their first token, so a
-  correct answer phrased differently counts as disagreement, and both the partition and the
-  accuracy column inherit that convention.</li>
+  correct answer phrased differently counts as disagreement, and the partition, the accuracy
+  column and every certified floor inherit that convention.</li>
   <li><strong>Injectivity is a required precondition</strong>, not a convenience. On a
-  many-to-one relation the equivariance signal inverts to 0.273, the certificate is
-  meaningless, and <code>collapsed</code> is correctly always false. The requirement was
-  diagnosed by measurement rather than predicted in advance.</li>
+  many-to-one relation the equivariance signal inverts to 0.273, the certificate is meaningless,
+  <code>collapsed</code> is correctly always false, and <code>select_prefix</code> raises. The
+  requirement was diagnosed by measurement rather than predicted in advance.</li>
   <li><strong>The bounds are bounds on a certificate.</strong> Theorems 1 and 2 are exact and
   they constrain a partition; they say nothing about how often such partitions arise in
-  deployment.</li>
+  deployment. The certificate is one-sided: it can prove a model wrong, never right.</li>
+  <li><strong>No pointwise Jacobian statistic can detect pooling.</strong> Theorem 5 is a no-go,
+  not a gap to be closed by a better spectral summary. Zero of 768 singular values fell below
+  <code>1e-6 × sigma_max</code>, so the observed collapse happened with an everywhere-nonsingular
+  Jacobian.</li>
   <li><strong>The logit-lens ranks before layer 24 are indicative</strong>, since the final norm
   is applied to states not trained to be read through it. Layer 24 is exact.</li>
   <li><strong><code>D_KY</code> is not a width-invariant constant</strong>
