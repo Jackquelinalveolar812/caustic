@@ -5,7 +5,17 @@ figure without a control is not a result and does not appear here.
 
 **Hardware** NVIDIA GeForce RTX 4060 Laptop, 8 GiB · Windows 11
 **Software** Python 3.11.9 · PyTorch 2.5.1+cu121 · transformers 5.3.0 · float32 · seed 0
-**Model** Qwen/Qwen2.5-0.5B — `D = 896`, 24 blocks, vocabulary 151,936
+**Models — two, and the distinction matters**
+
+| used for | model | width | blocks |
+|---|---|---|---|
+| retrieval, partitions, detection (§1–§5, §9, §10) | `Qwen/Qwen2.5-0.5B` | `D = 896` | 24 |
+| Jacobian dynamics and cost (§6–§7) | `distilgpt2` | `D = 768` | 6 |
+
+The dynamics and cost sections predate the switch to a model that knows facts, and
+were not re-run. **No figure from §6 or §7 may be combined with one from §1–§5**:
+they describe different networks. Reconciling them is outstanding work, not a
+detail.
 
 ---
 
@@ -27,7 +37,9 @@ every entity.
   language, 12 entities
     no prefix                    0.500                  8               5
     coherent prose, 128 tok      0.750                 12               1
+    shuffled words, 128 tok      1.000                 12               1
     " the" x 128                 0.000                  2               7
+    random token ids, 128 tok    0.750                 10               3
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -134,8 +146,9 @@ is exact — it reproduces the model's own output.
 
 ## 6. Dynamics
 
-Characteristic exponents of the token-position Jacobian product, block 3, 46 steps,
-`D = 768`, against a shuffled-token control.
+Characteristic exponents of the token-position Jacobian product, block 3, 46 steps.
+
+**Measured on `distilgpt2`, `D = 768`, not on the model used everywhere above.**
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -184,7 +197,7 @@ The shipped detector costs **five forward passes** and no Jacobian at all.
 
 ## 8. Validation
 
-**137 tests, every one against a closed-form or independently computed answer.**
+**163 tests, every one against a closed-form or independently computed answer.**
 
 | assertion | tolerance |
 |---|---|

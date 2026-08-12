@@ -18,7 +18,7 @@
   <a href="#3-detection-without-ground-truth"><img src="https://img.shields.io/badge/detector-5%20forward%20passes%2C%20no%20Jacobian-00aaff?style=flat-square" alt="Detector"></a>
   <a href="#3-detection-without-ground-truth"><img src="https://img.shields.io/badge/equivariance%20AUROC-0.995-brightgreen?style=flat-square" alt="AUROC"></a>
   <a href="#14-limits"><img src="https://img.shields.io/badge/precondition-injective%20relations%20only-orange?style=flat-square" alt="Precondition"></a>
-  <a href="#11-validation"><img src="https://img.shields.io/badge/tests-137%20closed--form-brightgreen?style=flat-square" alt="Tests"></a>
+  <a href="#11-validation"><img src="https://img.shields.io/badge/tests-163%20closed--form-brightgreen?style=flat-square" alt="Tests"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/core%20deps-numpy%20%2B%20torch-lightgrey?style=flat-square" alt="Deps"></a>
   <a href="pyproject.toml"><img src="https://img.shields.io/badge/python-%E2%89%A5%203.10-yellow?style=flat-square" alt="Python"></a>
 </p>
@@ -83,14 +83,14 @@ coherence, inference-time repair
 | [8](#8-dynamics-the-measured-input-to-theorem-4) | Dynamics | Contraction, attractor dimension, the input to Theorem 4 |
 | [9](#9-cost) | Cost | Why the shipped detector is five forward passes |
 | [10](#10-quick-start) | Quick start | Install, test, and a runnable example |
-| [11](#11-validation) | Validation | 137 tests, each against a closed form |
+| [11](#11-validation) | Validation | 163 tests, each against a closed form |
 | [12](#12-implementation-map) | Implementation map | File-by-file responsibility |
 | [13](#13-measurement-environment) | Measurement environment | The one host every number came from |
 | [14](#14-limits) | **Limits** | Collected once, at the end |
 
 Every number on this page is measured, and appears in [`RESULTS.md`](RESULTS.md) with the
 control it was compared against. There is no CI badge, because there is no CI: correctness is
-argued from 137 closed-form assertions ([§11](#11-validation)), which a green check cannot
+argued from 163 closed-form assertions ([§11](#11-validation)), which a green check cannot
 supply.
 
 ---
@@ -654,7 +654,7 @@ python -m caustic.experiments.probe_cost              # §9
 
 ## 11. Validation
 
-**137 tests, every one against a closed-form or independently computed answer.** Collected
+**163 tests, every one against a closed-form or independently computed answer.** Collected
 with `python -m pytest --collect-only -q`.
 
 | assertion | tolerance |
@@ -674,7 +674,7 @@ with `python -m pytest --collect-only -q`.
 | flat spectrum returns exponent zero (negative control) | `1e-9` |
 | partition is bitwise identical across repeated calls | exact |
 
-Three of those rows are negative controls — inputs whose correct answer is "nothing here" —
+Some of those rows are negative controls — inputs whose correct answer is "nothing here" —
 because the failure mode of a spectral pipeline is not an exception, it is a plausible number
 from noise. A passing suite is therefore a statement about the mathematics, not about the last
 time the code changed.
@@ -697,7 +697,7 @@ The package ships flat at the repository root.
 | [`caustic/oseledets.py`](caustic/oseledets.py) | `growth_filtration`, `filtration_entropy`, `tolerance_sweep` |
 | [`caustic/detect.py`](caustic/detect.py) | `auroc`, `auroc_ci`, and the Mahalanobis and PCA baselines any score must beat |
 | [`caustic/experiments/`](caustic/experiments) | one runnable file per measurement, each printing its own control |
-| [`tests/`](tests) | 137 closed-form assertions |
+| [`tests/`](tests) | 163 closed-form assertions |
 | [`RESULTS.md`](RESULTS.md) | every number on this page, with its control |
 
 ---

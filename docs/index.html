@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caustic — hallucination detection from the orbit partition</title>
+<meta name="description" content="A hallucination detector and repair for language models, built from the orbit partition of a relation, with five proved bounds behind it.">
+<style>
+  :root {
+    --bg: #fdfdfc;
+    --fg: #1b1b19;
+    --muted: #5f5f58;
+    --rule: #dedcd5;
+    --accent: #0a6b8a;
+    --panel: #f4f3ee;
+    --panel-rule: #e2e0d8;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --serif: Iowan Old Style, "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14151a;
+      --fg: #e3e2dd;
+      --muted: #9d9c95;
+      --rule: #2b2d34;
+      --accent: #6fc2dd;
+      --panel: #1b1d23;
+      --panel-rule: #2b2d34;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--serif);
+    font-size: 18px;
+    line-height: 1.62;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 3.5rem 1.25rem 5rem; }
+  header.masthead { border-bottom: 1px solid var(--rule); padding-bottom: 2rem; margin-bottom: 2.5rem; }
+  h1 {
+    font-size: clamp(2.1rem, 7vw, 3.1rem);
+    line-height: 1.05;
+    margin: 0 0 .6rem;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  .thesis { font-size: 1.12rem; margin: 0 0 1.2rem; }
+  .byline { font-size: .92rem; color: var(--muted); margin: 0; }
+  .byline a { color: var(--accent); }
+  h2 {
+    font-size: 1.42rem;
+    margin: 3.2rem 0 .9rem;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.08rem; margin: 2rem 0 .6rem; font-weight: 600; }
+  h3 .branch { color: var(--muted); font-weight: 400; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--accent); }
+  strong { font-weight: 600; }
+  code, kbd, pre { font-family: var(--mono); }
+  code { font-size: .86em; background: var(--panel); padding: .1em .3em; border-radius: 3px; }
+  pre {
+    background: var(--panel);
+    border: 1px solid var(--panel-rule);
+    border-radius: 4px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: .78rem;
+    line-height: 1.5;
+    margin: 0 0 1.4rem;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  .scroll { overflow-x: auto; margin: 0 0 1.4rem; border: 1px solid var(--panel-rule); border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: .84rem; font-family: var(--mono); }
+  caption { caption-side: top; text-align: left; padding: .7rem 1rem .2rem; color: var(--muted); font-family: var(--serif); font-size: .88rem; }
+  th, td { padding: .45rem .85rem; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--fg); }
+  tbody tr:last-child td { border-bottom: none; }
+  .num { font-variant-numeric: tabular-nums; }
+  .lede { font-size: 1.05rem; color: var(--fg); }
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--panel);
+    padding: .9rem 1.1rem;
+    margin: 0 0 1.4rem;
+    font-size: .96rem;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .theorem { border-top: 1px solid var(--rule); padding-top: 1.2rem; margin-top: 2rem; }
+  .statement { font-size: 1.02rem; }
+  .display {
+    font-family: var(--mono);
+    font-size: .95rem;
+    text-align: center;
+    padding: .9rem 0;
+    margin: 0 0 1.2rem;
+    overflow-x: auto;
+  }
+  .proof { font-size: .95rem; color: var(--fg); }
+  .proof em.qed { font-style: normal; }
+  .meta { font-size: .9rem; color: var(--muted); }
+  nav.toc { font-size: .92rem; margin-bottom: 1rem; }
+  nav.toc ol { margin: 0; padding-left: 1.3rem; }
+  nav.toc li { margin: .15rem 0; }
+  ul.plain { padding-left: 1.2rem; }
+  ul.plain li { margin: 0 0 .5rem; }
+  svg.chain { width: 100%; height: auto; display: block; margin: 0 0 1.4rem; color: var(--fg); }
+  footer { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--rule); font-size: .9rem; color: var(--muted); }
+  @media (max-width: 34rem) {
+    body { font-size: 17px; }
+    .wrap { padding: 2.2rem 1rem 3.5rem; }
+    pre { font-size: .7rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <h1>Caustic</h1>
+  <p class="thesis"><strong>A hallucination detector and repair for language models, built from
+  the orbit partition of a relation, with five proved bounds behind it.</strong></p>
+  <p class="thesis">A model can know a fact and still be unable to reach it. When it cannot,
+  distinct entities collapse onto one answer. That collapse is a topological invariant, it is
+  measurable with no ground truth, and it is bounded from below by a theorem.</p>
+  <p class="byline">
+    <strong>Invented by <a href="https://teerthsharma.vercel.app/">Teerth Sharma</a></strong> ·
+    <a href="https://github.com/teerthsharma/caustic">github.com/teerthsharma/caustic</a> ·
+    teerths57@gmail.com · MIT
+  </p>
+</header>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#failure">The failure, measured</a></li>
+    <li><a href="#partition">The orbit partition</a></li>
+    <li><a href="#detect">Detection without ground truth</a></li>
+    <li><a href="#branches">Five branches, and what each contributes</a></li>
+    <li><a href="#theorems">The five theorems, with proofs</a></li>
+    <li><a href="#certify">What the method certifies</a></li>
+    <li><a href="#repair">Repair, and its own effect size</a></li>
+    <li><a href="#inside">Inside a wrong answer</a></li>
+    <li><a href="#dynamics">Dynamics and cost</a></li>
+    <li><a href="#code">Running it</a></li>
+    <li><a href="#limits">Validation, environment, limits</a></li>
+  </ol>
+</nav>
+
+<h2 id="failure">1 · The failure, measured</h2>
+
+<p class="lede">Retrieval is gated by the character of the surrounding text, not by its length.
+The prefix below is held at exactly 128 tokens in every row. Only what those tokens
+<em>are</em> changes.</p>
+
+<p>The prefix contains none of the answers and is identical across every entity, so it carries
+no task information. The control is built into the design rather than argued for afterwards.</p>
+
+<div class="scroll">
+<table>
+  <caption>Same model, same 20 country–capital pairs, same prefix length.</caption>
+  <thead>
+    <tr><th>capital, 20 entities</th><th>accuracy</th><th>distinct answers</th><th>largest orbit</th></tr>
+  </thead>
+  <tbody class="num">
+    <tr><td>no prefix</td><td>0.550</td><td>15</td><td>4</td></tr>
+    <tr><td>coherent prose, 128 tok</td><td>1.000</td><td>20</td><td>1</td></tr>
+    <tr><td>shuffled words, 128 tok</td><td>0.000</td><td>1</td><td>20</td></tr>
+    <tr><td>" the" &times; 128</td><td>0.000</td><td>1</td><td>20</td></tr>
+    <tr><td>random token ids, 128 tok</td><td>0.100</td><td>3</td><td>18</td></tr>
+  </tbody>
+  <thead>
+    <tr><th>language, 12 entities</th><th>accuracy</th><th>distinct answers</th><th>largest orbit</th></tr>
+  </thead>
+  <tbody class="num">
+    <tr><td>no prefix</td><td>0.500</td><td>8</td><td>5</td></tr>
+    <tr><td>coherent prose, 128 tok</td><td>0.750</td><td>12</td><td>1</td></tr>
+    <tr><td>" the" &times; 128</td><td>0.000</td><td>2</td><td>7</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><strong>The same 128 tokens produce accuracy 1.000 or 0.000 depending only on whether they
+form language.</strong> Incoherent context does not merely fail to help: it merges all twenty
+countries onto a single answer, a largest orbit of 20, worse than the orbit of 4 with no
+prefix at all.</p>
+
+<p>A prompt whose prefix is the word <code>" the"</code> one hundred and twenty-eight times is
+a well-formed input, a valid tokenisation, and an unanswerable question.</p>
+
+<p class="meta"><strong>Caveat.</strong> <code>capital</code> and <code>language</code>
+disagree on the shuffled condition, 0.000 against 1.000. The boundary between <em>coherent</em>
+and <em>merely lexically diverse</em> is not settled by this measurement.</p>
+
+<h2 id="partition">2 · The orbit partition</h2>
+
+<p class="lede">Under the failure the model does not become noisy. It becomes constant.</p>
+
+<p>Distinct entities receive one answer. The object that records exactly that is the partition
+of entities induced by the model's answer map <code>f</code>, whose blocks are the classes of</p>
+
+<p class="display">e₁ ∼ e₂ ⟺ f(e₁) = f(e₂)</p>
+
+<p>This is <code>H0</code> of the answer-equivalence relation — its connected components. Three
+properties make it the right instrument:</p>
+
+<ul class="plain">
+  <li><strong>It needs no ground truth.</strong> It is computed from the model's own answers
+  over all entities, whether those answers are right or wrong.</li>
+  <li><strong>It cannot be confounded by accuracy.</strong> Every entity is included regardless
+  of correctness, so no class can collapse and no comparison inherits a moving base rate.</li>
+  <li><strong>It is what the theorems constrain.</strong> Both <code>n − m</code> and
+  <code>1/k</code> below are statements about blocks of this partition.</li>
+</ul>
+
+<p>And it is stable. The adjusted Rand index between the partitions at different prefix
+lengths, over all entities regardless of correctness:</p>
+
+<div class="scroll">
+<table>
+  <caption>Partition stability against context growth, with the answer-churn column beside it.</caption>
+  <thead><tr><th>capital</th><th>ARI</th><th>answers changed</th></tr></thead>
+  <tbody class="num">
+    <tr><td>0 → 32</td><td>−0.0243</td><td>0.600</td></tr>
+    <tr><td>0 → 128</td><td>0.0000</td><td>0.450</td></tr>
+    <tr><td>128 → 512</td><td>1.0000</td><td>0.150</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Below the threshold the partition is destroyed and rebuilt. Above it the partition is
+<strong>exactly</strong> preserved while individual answers still move — structure held, labels
+free. The churn column is what makes an ARI of 1.0000 evidence of stability rather than
+evidence that nothing happened.</p>
+
+<h2 id="detect">3 · Detection without ground truth</h2>
+
+<p class="lede">A fact carries a group action. A model that holds the fact must respect two
+halves of it; a model outside its retrieval regime respects only one.</p>
+
+<pre><code>invariance     paraphrase the prompt  ->  the answer must NOT change
+equivariance   swap the entity        ->  the answer MUST change</code></pre>
+
+<p>The failing model is invariant where it should be equivariant: it returns the same answer
+whichever entity is named. Both quantities are computed from the model's own outputs under
+transformations of its own input. Neither consults a correct answer, which is the only
+condition under which a hallucination detector is of any use.</p>
+
+<div class="scroll">
+<table>
+  <caption>AUROC, oriented so that predicting <em>wrong</em> scores above 0.5. Bracketed figures are bootstrap intervals.</caption>
+  <thead><tr><th></th><th>invariance (self-consistency)</th><th>collision (equivariance)</th></tr></thead>
+  <tbody class="num">
+    <tr><td>capital</td><td>0.859</td><td>0.995 [0.97, 1.00]</td></tr>
+    <tr><td>language</td><td>0.942</td><td>0.950 [0.83, 1.00]</td></tr>
+    <tr><td>pooled, n = 32</td><td>0.920</td><td>0.945 [0.85, 1.00]</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Five templates per relation means five forward passes per entity, and no derivative of
+anything. The invariance half is close to published self-consistency work and is included as
+the baseline the other half has to beat; the equivariance half — penalising a model for giving
+the <em>same</em> answer to different entities — is what reaches 0.995. Adding a third symmetry
+does not help: an inversion test scores 0.5686 pooled and exactly 0.5000 on
+<code>capital</code>, and the unweighted sum of all three scores 0.9451, identical to
+equivariance alone.</p>
+
+<div class="note">
+  <p><strong>The precondition, and it is not optional.</strong> Equivariance requires the
+  relation to be <strong>injective</strong>: distinct entities must genuinely warrant distinct
+  answers. On a many-to-one relation — many countries share a continent — distinct entities
+  <em>should</em> collide, and the signal inverts to <strong>0.273</strong>. Point it at such a
+  relation and you do not have a broken detector; you have a working detector with the sign
+  reversed, which is worse.</p>
+  <p><code>RelationSpec.injective</code> records the precondition so it cannot be forgotten,
+  and the certificate below returns zero whenever it is false.</p>
+</div>
+
+<h2 id="branches">4 · Five branches, and what each contributes</h2>
+
+<p class="lede">Each branch of mathematics answers one question about the collapse. They chain,
+and the chain is the argument.</p>
+
+<svg class="chain" viewBox="0 0 640 210" role="img" aria-label="Differential geometry and chaos theory both feed topology; topology feeds game theory; the partial-differential no-go stands aside, explaining why local methods cannot substitute.">
+  <g fill="none" stroke="currentColor" stroke-width="1.5">
+    <rect x="8" y="14" width="180" height="42" rx="4" opacity=".55"/>
+    <rect x="8" y="80" width="180" height="42" rx="4" opacity=".55"/>
+    <rect x="236" y="47" width="150" height="42" rx="4"/>
+    <rect x="434" y="47" width="150" height="42" rx="4" opacity=".55"/>
+    <rect x="8" y="152" width="360" height="42" rx="4" opacity=".55" stroke-dasharray="4 4"/>
+    <path d="M188 35 H212 V62 H232" opacity=".8"/>
+    <path d="M188 101 H212 V74 H232" opacity=".8"/>
+    <path d="M386 68 H430" opacity=".8"/>
+    <path d="M368 173 H410 V100" opacity=".5" stroke-dasharray="4 4"/>
+  </g>
+  <g fill="currentColor" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12.5">
+    <text x="24" y="33">differential</text><text x="24" y="49">geometry</text>
+    <text x="24" y="99">chaos</text><text x="24" y="115">theory</text>
+    <text x="252" y="74">topology</text>
+    <text x="450" y="74">game theory</text>
+    <text x="24" y="171">partial-differential symmetry</text>
+    <text x="24" y="187">(no-go)</text>
+  </g>
+  <g fill="currentColor" opacity=".8">
+    <path d="M232 62 l-8 -3 v6 z"/><path d="M232 74 l-8 -3 v6 z"/><path d="M430 68 l-8 -3 v6 z"/>
+  </g>
+</svg>
+
+<h3><span class="branch">topology ·</span> what shape does the failure have?</h3>
+<p>The answer-equivalence relation partitions the entities; the failure is a merge of blocks.
+Because the true relation is injective, a merged block is <em>already</em> a proof of error.
+Topology is what turns an observation into a count.</p>
+
+<h3><span class="branch">game theory ·</span> how bad is a merge, downstream?</h3>
+<p>A block of size <em>k</em> mapped to one answer is a <strong>pooling equilibrium</strong> in
+the signalling sense. Pooling destroys the receiver's ability to infer the sender's type, and
+no downstream player repairs it. This is what makes collapse an unrecoverable error rather
+than a recoverable one.</p>
+
+<h3><span class="branch">differential geometry ·</span> what causes a merge?</h3>
+<p>If the logit of a candidate token does not vary along a path between two entity
+representations, the two entities receive the same logit — and share an orbit. Vanishing
+entity coupling is therefore a <em>sufficient</em> condition for pooling. Differential geometry
+feeds topology, and the partition sees the consequence whether or not the coupling itself is
+measurable.</p>
+
+<h3><span class="branch">chaos theory ·</span> what drives merges to happen?</h3>
+<p>Measured on a live model, the token-position Jacobian product contracts volume enormously:
+a strongly negative exponent sum on a positive leading exponent, the signature of dissipative
+dynamics on a low-dimensional attractor. Once the image volume falls below the resolution
+separating decision regions, distinct inputs <em>must</em> pool. Contraction is the driver, and
+depth is the clock.</p>
+
+<h3><span class="branch">partial-differential symmetry ·</span> why not just watch the Jacobian?</h3>
+<p>Because it provably cannot work. There is a smooth map, nonsingular at every point, that is
+still many-to-one, and its two preimages have Jacobians related by a rotation — so they share
+every spectral invariant. No determinant, smallest singular value, condition number or
+spectral decay can tell the injective case from the collapsed one. It is the only result here
+that tells you what <em>not</em> to build.</p>
+
+<h2 id="theorems">5 · The five theorems, with proofs</h2>
+
+<p class="meta">Every statement is elementary, and that is deliberate: the value is not in the
+difficulty of the proofs but in the fact that each is checkable against a measurement made in
+this repository. <code>E</code> is a finite set of entities, <code>|E| = n</code>. A relation
+<code>R : E → A</code> is <em>injective</em> when distinct entities have distinct correct
+answers. A model induces <code>f : E → A</code>, and <code>P(f)</code> is the partition of
+<code>E</code> by the value of <code>f</code>, with <code>m = |P(f)|</code> blocks called
+<em>orbits</em>.</p>
+
+<div class="theorem">
+<h3>Theorem 1 <span class="branch">— topology — Orbit Error Bound</span></h3>
+<p class="statement">For injective <code>R</code>, the number of entities on which
+<code>f</code> errs is at least <code>n − m</code>.</p>
+<p class="display">err(f) ≥ n − m</p>
+<p class="proof"><strong>Proof.</strong> The true map <code>R</code> is injective, so distinct
+entities carry distinct correct answers. If <code>e₁ ≠ e₂</code> lie in one orbit then
+<code>f(e₁) = f(e₂)</code> while <code>R(e₁) ≠ R(e₂)</code>, so <code>f</code> is wrong on at
+least one of them. An orbit of size <code>s</code> therefore contributes at least
+<code>s − 1</code> errors, and summing over the <code>m</code> orbits gives
+<code>Σ (sᵢ − 1) = n − m</code>. <em class="qed">∎</em></p>
+<p class="meta"><strong>Tight:</strong> attained exactly when every orbit contains one correct
+answer. <strong>Measured:</strong> <code>capital</code> with no prefix gave <code>n = 20</code>,
+<code>m = 15</code>, certifying at least 5 wrong answers with no ground truth consulted;
+observed accuracy 0.550, so 9 were actually wrong and the bound held with slack.</p>
+</div>
+
+<div class="theorem">
+<h3>Theorem 2 <span class="branch">— game theory — Pooling Recovery Bound</span></h3>
+<p class="statement">If <code>f</code> maps a block of <code>k</code> entities to one answer,
+then for <strong>any</strong> downstream function <code>h</code>, the probability that
+<code>h(f(e))</code> recovers <code>e</code> under a uniform prior on that block is at most
+<code>1/k</code>.</p>
+<p class="display">Pr[ h(f(e)) = e ] ≤ 1/k</p>
+<p class="proof"><strong>Proof.</strong> <code>h ∘ f</code> is constant on the block, so it
+takes one value there. It can therefore agree with the identity on at most one of the
+<code>k</code> entities. Under a uniform prior the success probability is at most
+<code>1/k</code>. <em class="qed">∎</em></p>
+<p class="meta">A block of size <code>k &gt; 1</code> is a pooling equilibrium, and no amount of
+downstream capability recovers it — not a larger model above that layer, not a longer chain of
+thought, not a better decoder. <strong>Measured:</strong> the <code>" the" × 128</code> prefix
+pooled all 20 countries, bounding any downstream recovery at <strong>0.05</strong>.</p>
+</div>
+
+<div class="theorem">
+<h3>Theorem 3 <span class="branch">— differential geometry — Zero Coupling Implies Pooling</span></h3>
+<p class="statement">Let <code>z_c(h)</code> be the logit of token <code>c</code> as a function
+of the entity representation <code>h</code>, continuously differentiable on a domain containing
+a path <code>γ</code> from <code>h₁</code> to <code>h₂</code>. If the directional derivative of
+<code>z_c</code> along <code>γ</code> vanishes identically, then
+<code>z_c(h₁) = z_c(h₂)</code>.</p>
+<p class="display">z_c(h₂) − z_c(h₁) = ∫<sub>γ</sub> ∇z_c · dℓ = 0</p>
+<p class="proof"><strong>Proof.</strong> The fundamental theorem of calculus along
+<code>γ</code>, as displayed. <em class="qed">∎</em></p>
+<p class="meta"><strong>Consequence.</strong> If this holds for every candidate <code>c</code>,
+the two entities receive identical logit vectors, hence identical answers, hence share an
+orbit, and Theorem 1 applies. Differential geometry feeds topology.
+<code>path_integral_change</code> evaluates the integral numerically, and the suite pins it
+against linear and quadratic closed forms to <code>1e-6</code>.</p>
+</div>
+
+<div class="theorem">
+<h3>Theorem 4 <span class="branch">— chaos theory — Dissipative Pooling</span></h3>
+<p class="statement">Let <code>T</code> be differentiable with characteristic exponents
+<code>λ₁ ≥ … ≥ λ_D</code> whose sum <code>S = Σᵢ λᵢ</code> is negative. Then for any bounded
+set <code>A</code> of positive Lebesgue measure, the volume of its image contracts.</p>
+<p class="display">vol(Tⁿ(A)) ∼ e<sup>nS</sup> ⟶ 0</p>
+<p class="proof"><strong>Proof.</strong> The change-of-variables formula gives
+<code>vol(Tⁿ(A)) = ∫_A |det D(Tⁿ)|</code>, and the exponents are defined so that
+<code>(1/n) log |det D(Tⁿ)| → Σᵢ λᵢ = S</code>. With <code>S &lt; 0</code> the integrand decays
+like <code>exp(nS)</code>, so the volume does. <em class="qed">∎</em></p>
+<p class="meta"><strong>Consequence.</strong> Once the image volume falls below the resolution
+separating decision regions, distinct inputs must land in one region and pool. Chaos theory
+feeds topology. <strong>Measured:</strong> the token product at block 3 gave
+<code>S = −226.74</code> over 768 dimensions with only 139 expanding directions, and
+<code>D_KY = 29.57</code> at block 1 — a 26× compression against the width. What prevents total
+pooling in practice is that the trajectory is short, not that the map is volume-preserving.</p>
+</div>
+
+<div class="theorem">
+<h3>Theorem 5 <span class="branch">— partial-differential symmetry — No Local Criterion Detects Pooling</span></h3>
+<p class="statement">There exists a smooth map <code>F</code> whose Jacobian is nonsingular at
+every point of its domain and which is not injective. Consequently <strong>no function of the
+local Jacobian alone</strong> — determinant, smallest singular value, condition number,
+spectral decay, or any other pointwise invariant — can decide injectivity.</p>
+<p class="display">F(x, y) = (e<sup>x</sup> cos y, e<sup>x</sup> sin y)</p>
+<p class="proof"><strong>Proof by witness.</strong> <code>det DF = e^{2x} &gt; 0</code>
+everywhere, yet <code>F(x, y) = F(x, y + 2π)</code>. The Jacobians at the two preimages are
+related by a rotation and therefore share every spectral invariant, so no pointwise function of
+the Jacobian distinguishes the injective case from this one. <em class="qed">∎</em></p>
+<p class="meta">This is the honest statement of a moral the refutation of the Jacobian
+Conjecture made vivid: local invertibility everywhere does not imply global injectivity, and
+the failure is invisible to local data. It is a <strong>no-go</strong> result, and it is the
+only theorem here that tells you what not to build. The escape is global, and Theorem 1 is what
+takes it: compare <em>two</em> entities rather than examining one point — which is why the
+shipped detector is five forward passes and no Jacobian at all.</p>
+</div>
+
+<h2 id="certify">6 · What the method certifies</h2>
+
+<p class="lede">Theorem 1 turns the partition into a proof. For an injective relation on
+<code>n</code> entities producing <code>m</code> distinct answers, at least <code>n − m</code>
+answers are provably wrong, and the argument never consults an answer key.</p>
+
+<div class="scroll">
+<table>
+  <caption>The measured instance, with the accuracy column shown beside it rather than used by it.</caption>
+  <thead><tr><th>capital, 20 entities</th><th>n</th><th>m</th><th>certified wrong</th><th>observed accuracy</th></tr></thead>
+  <tbody class="num">
+    <tr><td>no prefix</td><td>20</td><td>15</td><td>5</td><td>0.550</td></tr>
+    <tr><td>coherent prose</td><td>20</td><td>20</td><td>0</td><td>1.000</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Two readings, both required. The certificate is <strong>sound</strong>: 5 were certified
+wrong, 9 were in fact wrong, and the bound held with slack. The certificate is <strong>not
+tight in practice</strong>: it saw 5 of the 9. Theorem 1 counts wrong answers; it does not name
+them. Declining to consult an answer key has a price, and that is the price.</p>
+
+<p>After repair the partition is fully separated, so the certificate correctly certifies
+nothing, and accuracy is 1.000 — the bound going to zero and the truth going to perfect, with
+accuracy never entering the computation.</p>
+
+<p><strong>Downstream, Theorem 2 caps what anything else can do.</strong> A pooled block of size
+<code>k</code> limits <em>any</em> recovery of the entity from the answer to <code>1/k</code>.
+For the fully collapsed 20-entity partition produced by the <code>" the" × 128</code> prefix,
+the ceiling is <strong>0.05</strong>. Nothing placed after that point — a bigger model, a
+verifier, a second pass, a retrieval step reading the answer — raises it, because what
+distinguished the twenty entities is not in the answer to be read.</p>
+
+<div class="note">
+  <p><strong>What this is not.</strong> These are bounds on a <em>certificate</em>, measured on
+  one model and two relations. They are not a claim about hallucination rates in general, in
+  this model or in any other. Theorem 1 says what follows from a partition; it does not say how
+  often such partitions arise in deployment, and nothing here measures that.</p>
+</div>
+
+<h2 id="repair">7 · Repair, and its own effect size</h2>
+
+<p class="lede">The detector finds collapsed orbits. <code>repair_by_context</code> applies the
+intervention the measurements point at, and reports the effect size rather than asserting
+it.</p>
+
+<pre><code>from caustic import NEUTRAL_PREFIX, repair_by_context
+
+report = repair_by_context(spec, answer_fn, prefix=NEUTRAL_PREFIX, gold=gold)
+print(report)
+# largest orbit 20 -> 1, distinct answers 1 -> 20 of 20 entities,
+# accuracy 0.000 -> 1.000  REPAIRED</code></pre>
+
+<ul class="plain">
+  <li><code>repaired</code> — true only for a genuine collapsed → fully separated transition.</li>
+  <li><code>worsened</code> — true when the prefix <strong>merged</strong> entities that were
+  previously separate.</li>
+  <li><code>accuracy_delta</code> — reported only when <code>gold</code> is supplied; the
+  verdict never consults it.</li>
+</ul>
+
+<p><strong><code>worsened</code> is not a defensive check.</strong> An incoherent prefix of the
+same length drove the largest orbit from 4 to 20 in the measurements this module is built on. A
+prefix can make things much worse, and a repair function that cannot say so is a repair
+function that will eventually lie.</p>
+
+<p><strong>Why this is not prompt engineering in the pejorative sense.</strong> The prefix
+contains none of the answers, is identical across entities, and is unrelated in subject. It
+cannot be leaking an answer, because the <em>same 128 tokens in shuffled order</em> drive
+accuracy to zero. What it supplies is distributional, not informational.
+<code>NEUTRAL_PREFIX</code> is 128 tokens on mechanical calculators, ocean currents, language
+and photosynthesis — the least interesting paragraph in the repository, and on
+<code>capital</code> it is worth 0.550 → 1.000.</p>
+
+<p>Two honest constraints ship with it. If a caller's relation concerns oceans, looms or
+photosynthesis then <code>NEUTRAL_PREFIX</code> is no longer neutral for them, which is why the
+prefix is a parameter. And <code>sweep_prefixes</code> returns a report for <em>every</em>
+candidate prefix, because quoting the best of several without reporting the rest is selection
+on the outcome.</p>
+
+<h2 id="inside">8 · Inside a wrong answer</h2>
+
+<p class="lede">Measured on items the model answers <strong>wrongly</strong>, with grouped
+cross-validation so that no template appears in both folds.</p>
+
+<div class="scroll">
+<table>
+  <caption>Nothing was destroyed. The right answer lost a competition.</caption>
+  <thead><tr><th>quantity, on wrong items</th><th>value</th><th>chance</th></tr></thead>
+  <tbody class="num">
+    <tr><td>entity still linearly recoverable from h_22</td><td>0.9624</td><td>0.0312</td></tr>
+    <tr><td>correct answer token recoverable from h_22</td><td>1.0000</td><td>0.0400</td></tr>
+    <tr><td>median rank of the correct answer</td><td>3 of 151,936</td><td>—</td></tr>
+    <tr><td>correct answer within the top 10</td><td>88 / 100</td><td>—</td></tr>
+    <tr><td>correct answer within the top 1000</td><td>100 / 100</td><td>—</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Recoverability on <strong>wrong</strong> items (0.9624) exceeds that on correct ones
+(0.8981). The context survives; the answer survives, near the top. This is the state Theorem 2
+addresses: the loss happens where distinct entities are mapped onto one answer, not in the
+representation feeding that map. It is also why Theorem 5 matters operationally — there is no
+local degeneracy at the moment of failure to go looking for, because nothing locally degenerate
+has happened.</p>
+
+<div class="scroll">
+<table>
+  <caption>Median rank of the correct answer, each layer read through the final norm and unembedding.</caption>
+  <thead><tr><th>layer</th><th>all</th><th>correct</th><th>wrong</th></tr></thead>
+  <tbody class="num">
+    <tr><td>20</td><td>30552</td><td>29594</td><td>31626</td></tr>
+    <tr><td>22</td><td>7</td><td>3</td><td>12</td></tr>
+    <tr><td>24</td><td>2</td><td>1</td><td>3</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The answer materialises across two layers, late and abruptly, and does not degrade
+afterwards.</p>
+
+<p class="meta"><strong>Caveat.</strong> The lens applies the final norm to intermediate states
+that were not trained to be read through it, so ranks before layer 24 are indicative. Layer 24
+is exact — it reproduces the model's own output.</p>
+
+<h2 id="dynamics">9 · Dynamics and cost</h2>
+
+<p class="lede">Theorem 4 needs a negative exponent sum. This is where that hypothesis is
+measured rather than assumed.</p>
+
+<div class="scroll">
+<table>
+  <caption>Characteristic exponents of the token-position Jacobian product, block 3, 46 steps, D = 768, against a shuffled-token control preserving the token multiset.</caption>
+  <thead><tr><th></th><th>lambda_1</th><th>sum</th><th>expanding</th><th>last-step drift</th></tr></thead>
+  <tbody class="num">
+    <tr><td>grounded</td><td>+0.1653</td><td>−226.74</td><td>139 / 768</td><td>0.0012</td></tr>
+    <tr><td>shuffled</td><td>+0.1852</td><td>−170.37</td><td>151 / 768</td><td>0.0003</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Positive leading exponent with a strongly negative sum: dissipative dynamics on a
+low-dimensional attractor. The drift column is what makes the values quotable — each is small
+against the value it drifts on.</p>
+
+<div class="scroll">
+<table>
+  <caption>Kaplan–Yorke dimension per block, validated against the textbook Lorenz spectrum (0.906, 0, −14.572) giving 2.0622, reproduced to 1e-3.</caption>
+  <thead><tr><th>block</th><th>D_KY</th><th>D / D_KY</th><th>expanding</th></tr></thead>
+  <tbody class="num">
+    <tr><td>1</td><td>29.57</td><td>26.0</td><td>9 / 768</td></tr>
+    <tr><td>3</td><td>298.08</td><td>2.6</td><td>139 / 768</td></tr>
+    <tr><td>5</td><td>674.67</td><td>1.1</td><td>354 / 768</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Block 1 places 768 dimensions of transport on a 29.57-dimensional attractor.
+<code>D_KY</code> varies across depth with <code>cv 0.6801</code>, so it is <strong>not</strong>
+a width-invariant constant, and the block-0 value saturates the formula rather than measuring a
+dimension. Both facts are stated because the number is otherwise easy to over-read: contraction
+is the hypothesis Theorem 4 needs, and <code>D_KY</code> describes how strong it is, not a
+second invariant.</p>
+
+<div class="scroll">
+<table>
+  <caption>Cost, measured against one block forward pass as the unit.</caption>
+  <thead><tr><th>operation</th><th>time</th><th>vs forward</th></tr></thead>
+  <tbody class="num">
+    <tr><td>block forward</td><td>0.588 ms</td><td>1×</td></tr>
+    <tr><td>full 768 × 768 exact Jacobian</td><td>53.694 ms</td><td>91.3×</td></tr>
+    <tr><td>top-8 Krylov, 20 iterations</td><td>1428.938 ms</td><td>2429.5×</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The exact Jacobian is <strong>26.6× cheaper</strong> than the Krylov estimator of its own top
+eight singular values, which it matches to <code>1.685e-04</code>. The estimator costs 26.6×
+more than the quantity it was brought in to approximate, and it is not a broken estimator:
+batched reverse-mode AD vectorises across all outputs, while <code>k</code>-column power
+iteration runs <code>k × iters</code> sequential passes. The crossover width is not measured and
+is not assumed.</p>
+
+<p>None of this is on the detector's path. <strong>The shipped detector costs five forward
+passes and no Jacobian at all</strong>, which Theorem 5 predicts in advance: the Jacobian could
+not have supplied the missing signal at any price.</p>
+
+<h2 id="code">10 · Running it</h2>
+
+<pre><code>git clone https://github.com/teerthsharma/caustic.git
+cd caustic
+pip install -e ".[dev]"          # numpy, torch, pytest
+python -m pytest -q              # 137 passed, no model download, no GPU
+pip install -e ".[experiments]"  # transformers, for a live model</code></pre>
+
+<pre><code>import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from caustic import NEUTRAL_PREFIX, RelationSpec, orbit_partition, repair_by_context
+
+MODEL = "Qwen/Qwen2.5-0.5B"
+tok = AutoTokenizer.from_pretrained(MODEL)
+model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=torch.float32).eval()
+
+
+def top1(prompt: str) -&gt; int:
+    """Prompt -&gt; top-1 next-token id. Must be deterministic: a sampled answer
+    makes the partition noise."""
+    ids = tok(prompt, return_tensors="pt").input_ids
+    with torch.no_grad():
+        return int(model(ids).logits[0, -1].argmax())
+
+
+facts = {"France": "Paris", "Japan": "Tokyo", "Peru": "Lima",
+         "Kenya": "Nairobi", "Norway": "Oslo"}
+
+spec = RelationSpec(
+    templates=("The capital of {e} is", "{e}'s capital is"),
+    entities=tuple(facts),
+    injective=True,          # distinct countries have distinct capitals
+)
+
+report = orbit_partition(spec, top1)
+print(report)                      # n entities -&gt; m distinct answers, largest orbit s
+print(report.certified_errors)     # Theorem 1: n - m, proved, no gold consulted
+print(report.collapsed)            # the boolean to act on
+
+gold = {e: tok(" " + a, add_special_tokens=False).input_ids[0]
+        for e, a in facts.items()}
+
+print(repair_by_context(spec, top1, prefix=NEUTRAL_PREFIX, gold=gold))
+# largest orbit s -&gt; 1, distinct answers m -&gt; 5 of 5 entities,
+# accuracy a -&gt; b  REPAIRED</code></pre>
+
+<p><code>orbit_partition</code> uses the first template. <code>symmetry_scores(spec, top1)</code>
+uses all of them and needs at least two, since invariance is undefined on one. Set
+<code>injective=False</code> for a many-to-one relation and both
+<code>certified_errors</code> and <code>collapsed</code> correctly report nothing.</p>
+
+<p>The theorems are callable on their own:</p>
+
+<pre><code>from caustic import orbit_error_bound, pooling_recovery_bound, winding_witness
+
+orbit_error_bound(20, 15)                      # 5    -- Theorem 1, measured instance
+pooling_recovery_bound(20)                     # 0.05 -- Theorem 2, collapsed ceiling
+image, jac, det = winding_witness(0.0, 0.0)    # Theorem 5, nonsingular and many-to-one</code></pre>
+
+<h2 id="limits">11 · Validation, environment, limits</h2>
+
+<p><strong>163 tests, every one against a closed-form or independently computed answer.</strong>
+Some of them are negative controls — inputs whose correct answer is "nothing here" — because
+the failure mode of a spectral pipeline is not an exception, it is a plausible number from
+noise.</p>
+
+<div class="scroll">
+<table>
+  <caption>A representative slice of the suite.</caption>
+  <thead><tr><th>assertion</th><th>tolerance</th></tr></thead>
+  <tbody class="num">
+    <tr><td>Jacobian of a position-wise linear block equals its weight matrix</td><td>1e-10</td></tr>
+    <tr><td>Krylov estimate matches exact svdvals</td><td>1e-6</td></tr>
+    <tr><td>log-volume equals torch.linalg.slogdet</td><td>1e-8</td></tr>
+    <tr><td>Kaplan–Yorke reproduces the Lorenz value 2.0622</td><td>1e-3</td></tr>
+    <tr><td>Theorem 1 bound never exceeds true error count</td><td>2000 random instances</td></tr>
+    <tr><td>Theorem 2 bound beaten by no constant decoder</td><td>exhaustive</td></tr>
+    <tr><td>Theorem 3 path integral matches linear and quadratic closed forms</td><td>1e-6</td></tr>
+    <tr><td>Theorem 4 exponent sum equals log|det Aⁿ|</td><td>1e-9</td></tr>
+    <tr><td>Theorem 5 both preimages share every spectral invariant</td><td>1e-9</td></tr>
+    <tr><td>flat spectrum returns exponent zero (negative control)</td><td>1e-9</td></tr>
+    <tr><td>partition is bitwise identical across repeated calls</td><td>exact</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>A passing suite is therefore a statement about the mathematics, not about the last time the
+code changed. There is no CI badge in this project, because there is no CI.</p>
+
+<h3>Measurement environment</h3>
+
+<pre><code>Hardware   NVIDIA GeForce RTX 4060 Laptop, 8 GiB · Windows 11
+Software   Python 3.11.9 · PyTorch 2.5.1+cu121 · transformers 5.3.0
+           float32 · seed 0
+Model      Qwen/Qwen2.5-0.5B — D = 896, 24 blocks, vocabulary 151,936
+Dynamics   token-position Jacobian product, block 3, 46 steps, D = 768</code></pre>
+
+<h3>Limits</h3>
+
+<ul class="plain">
+  <li><strong>One model at one width.</strong> Whether coherence-gated retrieval is a general
+  property of language models, or a behaviour of a 0.5B model outside its training regime, is
+  <strong>not</strong> established here.</li>
+  <li><strong>Two injective relations</strong>, of 12 and 20 entities. One distractor passage
+  per condition, one seed.</li>
+  <li><strong>Top-1 token comparison.</strong> Answers are compared by their first token, so a
+  correct answer phrased differently counts as disagreement, and both the partition and the
+  accuracy column inherit that convention.</li>
+  <li><strong>Injectivity is a required precondition</strong>, not a convenience. On a
+  many-to-one relation the equivariance signal inverts to 0.273, the certificate is
+  meaningless, and <code>collapsed</code> is correctly always false. The requirement was
+  diagnosed by measurement rather than predicted in advance.</li>
+  <li><strong>The bounds are bounds on a certificate.</strong> Theorems 1 and 2 are exact and
+  they constrain a partition; they say nothing about how often such partitions arise in
+  deployment.</li>
+  <li><strong>The logit-lens ranks before layer 24 are indicative</strong>, since the final norm
+  is applied to states not trained to be read through it. Layer 24 is exact.</li>
+  <li><strong><code>D_KY</code> is not a width-invariant constant</strong>
+  (<code>cv 0.6801</code> across depth), and the block-0 value saturates the formula rather than
+  measuring a dimension.</li>
+  <li><strong>The two relations disagree on the shuffled condition</strong> (0.000 against
+  1.000), so the boundary between coherent text and merely lexically diverse text is not
+  resolved by these measurements.</li>
+</ul>
+
+<footer>
+  <p><strong>Invented by <a href="https://teerthsharma.vercel.app/">Teerth Sharma</a></strong> ·
+  <a href="https://github.com/teerthsharma/caustic">github.com/teerthsharma/caustic</a> ·
+  teerths57@gmail.com · MIT</p>
+  <p>A caustic is where a map folds and distinct preimages merge. The partition is how you see
+  it without being told where to look.</p>
+</footer>
+
+</div>
+</body>
+</html>
