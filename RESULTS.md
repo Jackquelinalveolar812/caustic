@@ -327,6 +327,50 @@ useless as a signal. What they do explain is why an intervention this weak — 1
 tokens about photosynthesis, containing none of the answers — produces an effect
 this large. The decision was never robust.
 
+## 11. What the detector actually detects, and where 0.995 does not hold
+
+The 0.995 figure was measured on `capital` and `language` at five-token prompts.
+Tested on harder relations, chosen for low answer frequency rather than for
+observed failure, it does not hold.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  relation          ctx   n    acc  wrong  orbits    collision AUROC
+  small_capital       6  18  0.167     15       8    0.6889 [0.34, 1.00]
+  small_capital     113  18  0.556      8      14    0.6687 [0.38, 0.92]
+  element_symbol      7  16  0.062     15       3    0.7333 [0.50, 0.90]
+  element_symbol    114  16  1.000      0      16    undefined, one class
+
+  pooled  short   AUROC 0.7083 [0.3809, 1.0000]
+  pooled  full    AUROC 0.6687 [0.3819, 0.9167]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Both pooled intervals include 0.5. **On harder relations the detector is not
+demonstrated to work.**
+
+**What this means, stated as narrowly as the data supports.** Collision detects
+*orbit collapse*, not error. On `capital` and `language` the errors were collapse —
+several entities landing on one answer — and collision reached 0.995 against that.
+On harder relations the errors are dispersed ignorance, spread across many distinct
+wrong answers, so nothing collides and nothing fires. `element_symbol` at short
+context is the clearest case: 15 wrong answers occupying only 3 orbits at
+accuracy 0.062, where the model has collapsed onto a few generic tokens.
+
+Collapse is one cause of wrong answers among several. The 0.995 is this method's
+score against the cause it was built for, and it should be read that way rather
+than as a hallucination-detection figure.
+
+**Context does not explain the gap.** Short and full context give 0.7083 and
+0.6687 with overlapping intervals, so the earlier concern that 0.995 depended on
+the degenerate five-token regime is not confirmed. Relation difficulty separates
+the results; context length does not.
+
+**The central finding replicated on a third relation, and more strongly than
+before.** `element_symbol` moves from accuracy 0.062 to 1.000 and from 3 orbits to
+16 under 108 tokens of neutral prose containing no chemistry. That relation was
+selected for difficulty before it was run, not after.
+
 ## Limits
 
 One model at one width. Two injective relations, 12 and 20 entities. One
@@ -337,3 +381,8 @@ many-to-one relation, not predicted in advance.
 
 Whether coherence-gated retrieval is a general property of language models or a
 behaviour of a 0.5B model outside its training regime is **not** established here.
+
+The 0.995 detection figure applies to relations whose errors take the form of orbit
+collapse. Section 11 shows it falls to roughly 0.67 to 0.73, with intervals
+spanning chance, on relations where errors are dispersed instead. Any use of the
+detector should first check that the failure mode is collapse.
