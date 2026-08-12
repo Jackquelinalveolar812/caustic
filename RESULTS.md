@@ -203,6 +203,71 @@ The shipped detector costs **five forward passes** and no Jacobian at all.
 | flat spectrum returns exponent zero (negative control) | `1e-9` |
 | partition is bitwise identical across repeated calls | exact |
 
+## 9. Theoretical results: what the method certifies
+
+Theorem 1 turns the partition into a **lower bound on the error rate that requires
+no ground truth**. For an injective relation on `n` entities producing `m` distinct
+answers, the certified error floor is `(n - m) / n`.
+
+Every row below is computed by `caustic.theorems.certified_error_floor`, and the
+measured error is shown beside it. The theorem asserts floor <= measured, and it
+holds on every row with slack.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  relation   condition       n    m   certified floor   measured error
+  capital    no prefix      20   15             0.250            0.450
+  capital    prose 128      20   20             0.000            0.000
+  capital    " the" x128    20    1             0.950            1.000
+  language   no prefix      12    8             0.333            0.500
+  language   prose 128      12   12             0.000            0.250
+  language   " the" x128    12    2             0.833            1.000
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+### Certified reduction
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  capital,  no prefix -> prose            +0.250   certified error removed
+  language, no prefix -> prose            +0.333   certified error removed
+  capital,  " the" x128 -> prose          +0.950   full measured span
+  capital,  no prefix -> " the" x128      -0.700   certified error ADDED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+On `capital`, the choice of prefix moves the **provable** error floor across a
+**95-point range** — from 0.950 under a degenerate prefix to 0.000 under coherent
+prose, at identical token count. The fourth row is not a footnote: a prefix can add
+0.700 to the certified floor, and `repair_by_context` reports that case as
+`WORSENED` rather than quietly returning a number.
+
+### Downstream ceiling, from Theorem 2
+
+A pooled block of size `k` caps **any** downstream recovery of the entity at `1/k`.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  largest orbit 20 (" the" x128)   recovery ceiling  0.05
+  largest orbit  1 (prose 128)     recovery ceiling  1.00      20x gain
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+No downstream component recovers what a pooled block destroyed, however capable it
+is. That is what makes collapse worth detecting rather than merely scoring.
+
+### What these numbers are, and are not
+
+They are bounds on a **certificate**, measured on one model and two injective
+relations. `+0.250` means a quarter of the answers were provably wrong before the
+intervention and none are provably wrong after — not that the true error rate fell
+by exactly that much. On `capital` the true error happened to fall further, 0.450
+to 0.000; on `language` it fell from 0.500 to 0.250 while the certified floor went
+to zero, which is the bound behaving exactly as a bound should.
+
+The certificate is one-sided by construction. It can prove a model wrong. It can
+never prove a model right.
+
 ## Limits
 
 One model at one width. Two injective relations, 12 and 20 entities. One

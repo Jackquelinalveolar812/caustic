@@ -240,3 +240,50 @@ def test_t5_explains_the_measured_null_result():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --- what the theorems certify about an intervention -----------------------
+
+
+def test_certified_floor_matches_the_measured_table():
+    from caustic.theorems import certified_error_floor as floor
+
+    rows = [(20, 15, 0.250, 0.450), (20, 20, 0.000, 0.000), (20, 1, 0.950, 1.000),
+            (12, 8, 0.3333, 0.500), (12, 12, 0.000, 0.250), (12, 2, 0.8333, 1.000)]
+    for n, m, expected, measured_err in rows:
+        got = floor(n, m)
+        assert got == pytest.approx(expected, abs=1e-3)
+        assert got <= measured_err + 1e-9, "Theorem 1 violated on a measured row"
+
+
+def test_certified_reduction_matches_the_reported_deltas():
+    from caustic.theorems import certified_reduction as red
+
+    assert red(20, 15, 20) == pytest.approx(0.250)
+    assert red(12, 8, 12) == pytest.approx(1 / 3, abs=1e-9)
+    assert red(20, 1, 20) == pytest.approx(0.950)
+
+
+def test_a_worsening_intervention_reports_a_negative_reduction():
+    from caustic.theorems import certified_reduction as red
+
+    assert red(20, 15, 1) == pytest.approx(-0.700)
+
+
+def test_recovery_ceiling_gain_is_the_block_size_ratio():
+    from caustic.theorems import recovery_ceiling_gain as gain
+
+    assert gain(20, 1) == pytest.approx(20.0)
+    assert gain(1, 1) == pytest.approx(1.0)
+    assert gain(2, 4) == pytest.approx(0.5)
+
+
+def test_floor_never_exceeds_true_error_on_random_instances():
+    from caustic.theorems import certified_error_floor as floor
+
+    rng = np.random.default_rng(11)
+    for _ in range(2000):
+        n = int(rng.integers(2, 30))
+        truth = np.arange(n)
+        pred = rng.integers(0, max(2, n // 2), n)
+        assert floor(n, len(np.unique(pred))) <= float((pred != truth).mean()) + 1e-12

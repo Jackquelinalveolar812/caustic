@@ -127,6 +127,9 @@ __all__ = [
     "path_integral_change",
     "volume_decay_rate",
     "winding_witness",
+    "certified_error_floor",
+    "certified_reduction",
+    "recovery_ceiling_gain",
 ]
 
 
@@ -184,3 +187,41 @@ def winding_witness(x: float, y: float) -> tuple[np.ndarray, np.ndarray, float]:
     image = np.array([ex * np.cos(y), ex * np.sin(y)])
     jac = np.array([[ex * np.cos(y), -ex * np.sin(y)], [ex * np.sin(y), ex * np.cos(y)]])
     return image, jac, float(np.linalg.det(jac))
+
+
+# --- what the theorems certify about an intervention -----------------------
+
+
+def certified_error_floor(n_entities: int, n_distinct: int) -> float:
+    """Theorem 1 as a rate: the provable fraction of answers that are wrong.
+
+    `(n - m) / n`. A lower bound on the true error rate, computed from the
+    partition alone with no ground truth consulted.
+    """
+    return orbit_error_bound(n_entities, n_distinct) / n_entities
+
+
+def certified_reduction(n_entities: int, m_before: int, m_after: int) -> float:
+    """Provable error eliminated by an intervention, in percentage points / 100.
+
+    An intervention that moves the partition from `m_before` orbits to `m_after`
+    lowers the certified error floor by `(m_after - m_before) / n`. Negative when
+    the intervention merges entities, which is a real outcome: an incoherent
+    prefix of matched length drove `m` from 15 to 1 and the floor from 0.25 to
+    0.95.
+
+    This is a reduction in what can be *proved* wrong, not a measurement of what
+    is wrong. The true error rate is bounded below by the floor and may exceed it.
+    """
+    return certified_error_floor(n_entities, m_before) - certified_error_floor(
+        n_entities, m_after
+    )
+
+
+def recovery_ceiling_gain(largest_before: int, largest_after: int) -> float:
+    """Theorem 2 as a ratio: how much the downstream recovery ceiling improves.
+
+    A pooled block of size `k` caps any downstream recovery at `1/k`, so shrinking
+    the largest block from `k0` to `k1` multiplies the ceiling by `k0 / k1`.
+    """
+    return pooling_recovery_bound(largest_after) / pooling_recovery_bound(largest_before)
