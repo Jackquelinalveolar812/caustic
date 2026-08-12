@@ -360,7 +360,7 @@ Let `T` be differentiable with characteristic exponents `λ_1 ≥ … ≥ λ_D` 
 is negative. Then for any bounded set `A` of positive Lebesgue measure, the volume of its image
 contracts:
 
-$$\operatorname{vol}(T^{n}(A)) \sim e^{nS} \longrightarrow 0$$
+$$\mathrm{vol}(T^{n}(A)) \sim e^{nS} \longrightarrow 0$$
 
 **Proof.** The change-of-variables formula gives `vol(T^n(A)) = ∫_A |det D(T^n)|`, and the
 exponents are defined so that `(1/n) log |det D(T^n)| → Σ_i λ_i = S`. With `S < 0` the integrand
