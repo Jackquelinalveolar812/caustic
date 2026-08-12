@@ -268,6 +268,52 @@ to zero, which is the bound behaving exactly as a bound should.
 The certificate is one-sided by construction. It can prove a model wrong. It can
 never prove a model right.
 
+## 10. Why so weak an intervention moves so much
+
+The decision the model gets wrong is a near-tie, and this is what makes the whole
+effect possible.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  vocabulary                                             151,936
+  wrong items                                            15 of 32
+
+  logit gap, chosen minus gold          mean 0.8338   median 0.8085
+  logit standard deviation over vocab   mean 3.2942
+  gap as a fraction of one sd           mean 0.2526
+
+  p(chosen) 0.2042      p(gold) 0.1005      ratio 2.76
+  mass on those two     0.3047
+  mass on the other 151,934 tokens        0.6953
+
+  effective support exp(H)   wrong 30.0   correct 27.5   of 151,936
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+The model is not confidently wrong. It is wrong by **a quarter of a standard
+deviation**, choosing between roughly thirty live candidates while the remaining
+151,934 tokens absorb 69.5% of the probability mass.
+
+That number explains the size of the coherence effect. A prefix has to move logits
+by about 0.83 to flip these decisions, and Section 6 measured a positive leading
+exponent of +0.1653, so a small change at the input grows along the expanding
+directions. The chain is:
+
+```
+prefix character changes
+  -> perturbation grows            lambda_1 = +0.1653
+  -> logits shift by order 0.83
+  -> flips a 0.2526 sd near-tie among about 30 candidates
+  -> distinct entities land on one answer, which is orbit collapse
+  -> certified error floor moves from 0.000 to 0.950
+```
+
+Chaos theory earns its place here as the *explanation* rather than as a detector.
+Section 6 showed the exponents do not separate correct from wrong answers and are
+useless as a signal. What they do explain is why an intervention this weak — 128
+tokens about photosynthesis, containing none of the answers — produces an effect
+this large. The decision was never robust.
+
 ## Limits
 
 One model at one width. Two injective relations, 12 and 20 entities. One
